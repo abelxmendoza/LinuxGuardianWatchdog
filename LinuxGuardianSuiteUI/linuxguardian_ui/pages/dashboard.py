@@ -36,10 +36,10 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 class DashboardPage(Gtk.Box):
     def __init__(self) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.set_margin_top(16)
-        self.set_margin_bottom(16)
-        self.set_margin_start(16)
-        self.set_margin_end(16)
+        self.set_margin_top(24)
+        self.set_margin_bottom(24)
+        self.set_margin_start(24)
+        self.set_margin_end(24)
 
         self.append(page_header("Security dashboard", "Scan, inspect, and maintain your Linux desktop.", "security-high-symbolic"))
         overview = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, homogeneous=True)
@@ -84,14 +84,15 @@ class DashboardPage(Gtk.Box):
         last_card.append(self.last_scan_title)
 
         self.last_scan_detail = Gtk.Label(
-            label="Results are stored in ~/.linuxguardian/scans/ after each run.",
+            label="Run a scan to store the result. Later scans can skip unchanged files.",
             xalign=0,
             wrap=True,
         )
         self.last_scan_detail.add_css_class("omega-dim")
         last_card.append(self.last_scan_detail)
 
-        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        actions.add_css_class("process-toolbar")
         self.append(section_header("Quick actions"))
         self.append(actions)
 
@@ -117,20 +118,22 @@ class DashboardPage(Gtk.Box):
         self.spinner = Gtk.Spinner()
         actions.append(self.spinner)
 
-        scan_opts = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        scan_opts = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.append(scan_opts)
 
-        self.full_check = Gtk.CheckButton(label="Full scan (include SDKs, caches, git)")
+        self.full_check = Gtk.CheckButton(label="Include developer tools and build caches")
+        self.full_check.set_tooltip_text("Adds SDKs, compiler caches, and git objects to the scan — takes longer but is more thorough")
         scan_opts.append(self.full_check)
 
-        self.changed_check = Gtk.CheckButton(label="Only files changed since last scan")
+        self.changed_check = Gtk.CheckButton(label="Scan only files modified since last scan")
+        self.changed_check.set_tooltip_text("Skips files that haven't changed — much faster, but relies on a previous scan existing")
         self.changed_check.set_active(True)
         scan_opts.append(self.changed_check)
 
         self.progress_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.progress_card.add_css_class("omega-card")
-        self.progress_card.set_margin_start(4)
-        self.progress_card.set_margin_end(4)
+        self.progress_card.set_margin_start(0)
+        self.progress_card.set_margin_end(0)
         self.progress_card.set_visible(False)
         self.append(self.progress_card)
 
@@ -159,7 +162,7 @@ class DashboardPage(Gtk.Box):
         times.append(self.elapsed_label)
 
         self.remaining_label = Gtk.Label(label="", xalign=1, hexpand=True)
-        self.remaining_label.add_css_class("omega-warning")
+        self.remaining_label.add_css_class("omega-dim")
         times.append(self.remaining_label)
 
         self.current_label = Gtk.Label(label="", xalign=0, hexpand=True)
@@ -210,6 +213,9 @@ class DashboardPage(Gtk.Box):
             self.progress_card.set_visible(True)
             self.progress_title.set_label(f"{label} in progress")
             self.progress_subtitle.set_label("Started — elapsed time will keep ticking even while the scanner is quiet.")
+            for _cls in ("omega-heading", "omega-warning"):
+                self.remaining_label.remove_css_class(_cls)
+            self.remaining_label.add_css_class("omega-dim")
             self.remaining_label.set_label("Still running")
             self.elapsed_label.set_label("Elapsed 0s")
             self.current_label.set_label("")
@@ -286,6 +292,11 @@ class DashboardPage(Gtk.Box):
         self._current_lines = []
         self.buffer.set_text("")
 
+    def _set_remaining_color(self, css: str) -> None:
+        for cls in ("omega-dim", "omega-warning", "omega-heading"):
+            self.remaining_label.remove_css_class(cls)
+        self.remaining_label.add_css_class(css)
+
     def _finish_progress(self, code: int, label: str) -> None:
         elapsed = time.monotonic() - self._started_at if self._started_at else 0.0
         took = format_duration(elapsed)
@@ -293,14 +304,17 @@ class DashboardPage(Gtk.Box):
             self.progress_title.set_label(f"{label} stopped")
             self.remaining_label.set_label(f"Stopped after {took}")
             self.progress_bar.set_text("Stopped")
+            self._set_remaining_color("omega-dim")
         elif code == 0:
             self.progress_title.set_label(f"{label} finished")
             self.remaining_label.set_label(f"Completed in {took}")
             self.progress_bar.set_fraction(1.0)
-            self.progress_bar.set_text("100%")
+            self.progress_bar.set_text("Done")
+            self._set_remaining_color("omega-heading")
         else:
             self.progress_title.set_label(f"{label} finished with errors")
             self.remaining_label.set_label(f"Exited after {took}")
+            self._set_remaining_color("omega-warning")
 
     def _attach_running_scan(self) -> bool:
         scan = self._attached_scan or find_running_scan()

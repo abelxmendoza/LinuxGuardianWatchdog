@@ -52,16 +52,17 @@ class CacheCleanerPage(Gtk.Box):
     def __init__(self, toast_overlay: Adw.ToastOverlay) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self._toast_overlay = toast_overlay
-        self.set_margin_top(16)
-        self.set_margin_bottom(16)
-        self.set_margin_start(16)
-        self.set_margin_end(16)
+        self.set_margin_top(24)
+        self.set_margin_bottom(24)
+        self.set_margin_start(24)
+        self.set_margin_end(24)
 
         self.append(page_header("Cache cleaner", "Review reclaimable space before clearing selected categories.", "user-trash-symbolic"))
 
-        self.append(info_banner("Review the categories and paths below. Clearing caches can slow the next app launch."))
+        self.append(info_banner("These are temporary files your apps rebuild automatically. Clearing them is safe — apps may take a few extra seconds to start up the first time after clearing."))
 
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        toolbar.add_css_class("process-toolbar")
         self.append(toolbar)
 
         rescan_btn = Gtk.Button(label="Rescan")
@@ -80,11 +81,13 @@ class CacheCleanerPage(Gtk.Box):
         self.spinner = Gtk.Spinner()
         toolbar.append(self.spinner)
 
-        self.total_label = Gtk.Label(xalign=0)
+        total_card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        total_card.add_css_class("omega-card")
+        self.total_label = Gtk.Label(xalign=0, hexpand=True)
         self.total_label.add_css_class("omega-heading")
-        self.total_label.add_css_class("omega-card")
         self.total_label.add_css_class("title-3")
-        self.append(self.total_label)
+        total_card.append(self.total_label)
+        self.append(total_card)
 
         scroller = Gtk.ScrolledWindow(vexpand=True)
         self.append(scroller)
@@ -96,6 +99,7 @@ class CacheCleanerPage(Gtk.Box):
         self._checkboxes: dict[str, Gtk.CheckButton] = {}
         self._category_bytes: dict[str, int] = {}
         self._category_paths: dict[str, list[tuple[int, str]]] = {}
+        self._scanned = False
 
         self.rescan()
 
@@ -113,6 +117,7 @@ class CacheCleanerPage(Gtk.Box):
 
     def _on_scan_done(self, code: int, lines: list[str]) -> bool:
         self._set_busy(False)
+        self._scanned = True
         self._category_bytes = {}
         self._category_paths = {}
         for line in lines:
@@ -134,11 +139,25 @@ class CacheCleanerPage(Gtk.Box):
             self.listbox.remove(child)
         self._checkboxes = {}
 
+        found = False
         for category in CATEGORY_ORDER:
             total = self._category_bytes.get(category, 0)
             if total == 0:
                 continue
+            found = True
             self.listbox.append(self._build_category_row(category, total))
+
+        if not found and self._scanned:
+            empty = Gtk.Label(
+                label="Nothing to clear — your cache is already clean.",
+                xalign=0,
+                wrap=True,
+                margin_top=20,
+                margin_bottom=20,
+                margin_start=14,
+            )
+            empty.add_css_class("omega-dim")
+            self.listbox.append(empty)
 
         self._update_total()
 
@@ -155,13 +174,14 @@ class CacheCleanerPage(Gtk.Box):
         header.append(check)
 
         name_label = Gtk.Label(label=f"{name} — {human(total)}", xalign=0, hexpand=True)
-        name_label.add_css_class("heading")
+        name_label.add_css_class("omega-heading")
         name_label.set_wrap(True)
         header.append(name_label)
 
         paths = self._category_paths.get(category, [])
         if paths:
-            expander = Gtk.Expander(label=f"{len(paths)} item(s)")
+            n = len(paths)
+            expander = Gtk.Expander(label=f"Show {n} location{'s' if n != 1 else ''}")
             outer.append(expander)
             detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin_top=4)
             expander.set_child(detail)
@@ -183,7 +203,10 @@ class CacheCleanerPage(Gtk.Box):
             if cb.get_active()
         )
         grand_total = sum(self._category_bytes.values())
-        self.total_label.set_label(f"Selected: {human(selected)} of {human(grand_total)} reclaimable")
+        if grand_total == 0:
+            self.total_label.set_label("Nothing to clear" if self._scanned else "—")
+        else:
+            self.total_label.set_label(f"Selected: {human(selected)} of {human(grand_total)} reclaimable")
 
     def _selected_categories(self) -> list[str]:
         return [cat for cat, cb in self._checkboxes.items() if cb.get_active()]
