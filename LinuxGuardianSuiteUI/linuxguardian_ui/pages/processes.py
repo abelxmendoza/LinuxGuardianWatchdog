@@ -131,6 +131,16 @@ class ProcessesPage(Gtk.Box):
         copy_btn = Gtk.Button(label="Copy All")
         copy_btn.connect("clicked", self._on_copy_all)
         toolbar.append(copy_btn)
+
+        close_all_btn = Gtk.Button(label="Close All Apps")
+        close_all_btn.add_css_class("danger-outline")
+        close_all_btn.set_tooltip_text(
+            "Asks every app under 'Programs you opened' to close (SIGTERM). "
+            "Never touches background services, desktop helpers, or system processes."
+        )
+        close_all_btn.connect("clicked", self._on_close_all_clicked)
+        toolbar.append(close_all_btn)
+
         help_btn = Gtk.Button(label="Process guide")
         help_btn.set_tooltip_text("Learn what to keep running, what closing affects, and how End differs from Force Kill")
         help_btn.connect("clicked", self._show_guide)
@@ -494,6 +504,71 @@ class ProcessesPage(Gtk.Box):
         force_btn.connect("clicked", lambda _b, g=group: self._confirm_kill(g, force=True))
         actions.append(force_btn)
         return row
+
+    # -- close-all (safe) -------------------------------------------------
+    def _safe_kill_all_groups(self) -> list[dict]:
+        """Return only groups that are safe to bulk-close.
+
+        Rules that can never be relaxed:
+        - impact must be 'close_app' — anything else is off-limits
+        - LinuxGuardian itself is excluded (killing the UI mid-action is bad UX)
+        Kernel threads are already filtered out by _groups_from callers.
+        """
+        sort_field = "mem" if self.sort_dropdown.get_selected() == 1 else "cpu"
+        groups = self._groups_from(
+            [r for r in self._rows if r.get("group_id") != "kernel"], sort_field
+        )
+        return [g for g in groups if g["impact"] == "close_app" and g["id"] != "linuxguardian"]
+
+    def _on_close_all_clicked(self, _btn: Gtk.Button) -> None:
+        groups = self._safe_kill_all_groups()
+        if not groups:
+            self._toast_overlay.add_toast(Adw.Toast(title="No open apps to close", timeout=2))
+            return
+        total_procs = sum(len(g["pids"]) for g in groups)
+        name_list = ", ".join(g["title"] for g in groups)
+        confirm(
+            self.get_root(),
+            f"Close {len(groups)} open app{'s' if len(groups) != 1 else ''}?",
+            f"This asks each app to close gracefully (same as clicking End on each one). "
+            f"Apps: {name_list}. "
+            f"{total_procs} process{'es' if total_procs != 1 else ''} total.\n\n"
+            "Background services, desktop helpers, and system processes are never touched.",
+            confirm_label="Close Apps",
+            on_confirm=lambda: self._do_close_all(groups),
+            destructive=True,
+        )
+
+    def _do_close_all(self, groups: list[dict]) -> None:
+        pid_to_group: dict[int, dict] = {pid: g for g in groups for pid in g["pids"]}
+        remaining = len(pid_to_group)
+        if remaining == 0:
+            return
+        failed_titles: set[str] = set()
+
+        def on_one_done(pid: int, code: int, _lines: list[str]) -> bool:
+            nonlocal remaining
+            if code != 0:
+                failed_titles.add(pid_to_group[pid]["title"])
+            remaining -= 1
+            if remaining == 0:
+                if failed_titles:
+                    msg = (
+                        f"Closed {len(groups) - len(failed_titles)} of {len(groups)} apps — "
+                        f"{', '.join(sorted(failed_titles))} needed sudo or failed"
+                    )
+                else:
+                    msg = f"Closed {len(groups)} app{'s' if len(groups) != 1 else ''}"
+                self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=4))
+                self.refresh()
+            return False
+
+        for pid in pid_to_group:
+            run_sync_async(
+                "linux_process_manager.sh",
+                ["--kill", str(pid)],
+                lambda c, l, p=pid: on_one_done(p, c, l),
+            )
 
     # -- actions ----------------------------------------------------------
     def _show_guide(self, _button: Gtk.Button) -> None:
