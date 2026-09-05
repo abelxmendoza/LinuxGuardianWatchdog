@@ -73,6 +73,19 @@ python3 -m pip install -r requirements.txt   # or use your distro's PyGObject pa
 python3 -m linuxguardian_ui.main
 ```
 
+### Desktop / dock integration
+
+To launch it like a normal installed app — from the app menu, a Desktop
+icon, and pinned to the dock (GNOME; other desktops get the app menu entry
+and Desktop icon, pin to the dock manually):
+
+```bash
+cd LinuxGuardianSuiteUI
+./install_desktop_entry.sh --install
+```
+
+Run `./install_desktop_entry.sh --uninstall` to remove it again.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Bundles/relies on ClamAV (GPL-2.0) and

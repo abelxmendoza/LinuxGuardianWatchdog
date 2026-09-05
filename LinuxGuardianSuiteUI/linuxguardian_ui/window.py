@@ -15,20 +15,21 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
         super().__init__(application=app, title="LinuxGuardian Watchdog")
         self.set_default_size(900, 600)
 
-        toolbar_view = Adw.ToolbarView()
-        self.set_content(toolbar_view)
+        # Adw.ToolbarView needs libadwaita >= 1.4; build the header + content
+        # layout by hand instead so this also runs on 1.1-1.3 (e.g. Ubuntu 22.04).
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.set_content(root)
 
         header = Adw.HeaderBar()
-        toolbar_view.add_top_bar(header)
+        root.append(header)
 
         view_switcher = Adw.ViewSwitcher()
         header.set_title_widget(view_switcher)
 
-        stack = Adw.ViewStack()
+        stack = Adw.ViewStack(vexpand=True)
         view_switcher.set_stack(stack)
-        toolbar_view.set_content(stack)
+        root.append(stack)
 
-        stack.add_titled_with_icon(
-            DashboardPage(), "dashboard", "Dashboard", "security-high-symbolic"
-        )
+        page = stack.add_titled(DashboardPage(), "dashboard", "Dashboard")
+        page.set_icon_name("security-high-symbolic")
         # Future pages: incidents history, settings — see docs/ROADMAP.md
