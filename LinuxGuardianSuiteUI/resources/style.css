@@ -1,16 +1,19 @@
+/* Upstream visual reference: abelxmendoza/MacGuardianWatchdog
+ * MacGuardianSuiteUI/Sources/MacGuardianSuiteUI/ThemeColors.swift.
+ * Lightened text accents preserve readability on the native GTK dark surfaces. */
 /* "Omega Black-Ops" theme — ported from MacGuardianWatchdog's terminal
  * theme (theme_omega_black_ops.sh) so the Linux GUI matches the original's
  * dark, purple/red/yellow security-suite look. */
 
-@define-color omega_bg #0d0d0d;
-@define-color omega_bg_raised #161616;
-@define-color omega_bg_row_alt #131313;
-@define-color omega_border alpha(#8c00ff, 0.35);
-@define-color omega_text #e5e5e5;
-@define-color omega_text_dim #9a9a9a;
-@define-color omega_purple #8c00ff;
-@define-color omega_red #ff1100;
-@define-color omega_yellow #ffe600;
+@define-color omega_bg #000000;
+@define-color omega_bg_raised #1a1a1a;
+@define-color omega_bg_row_alt #202020;
+@define-color omega_border alpha(#b5a4e8, 0.18);
+@define-color omega_text #e6e6e6;
+@define-color omega_text_dim #a9a8ba;
+@define-color omega_purple #b69aff;
+@define-color omega_red #ff7d8d;
+@define-color omega_yellow #edc777;
 
 window, .background {
   background-color: @omega_bg;
@@ -48,7 +51,7 @@ button:hover {
 }
 
 button.suggested-action {
-  background-color: @omega_purple;
+  background-color: #8c00ff;
   color: #ffffff;
   border: none;
 }
@@ -58,7 +61,7 @@ button.suggested-action:hover {
 }
 
 button.destructive-action {
-  background-color: @omega_red;
+  background-color: #963c50;
   color: #ffffff;
   border: none;
 }
@@ -120,4 +123,114 @@ toast {
   background-color: @omega_bg_raised;
   color: @omega_text;
   border: 1px solid @omega_border;
+}
+
+progressbar > trough {
+  min-height: 12px;
+  border-radius: 6px;
+  background-color: @omega_bg;
+  border: 1px solid @omega_border;
+}
+
+progressbar > trough > progress {
+  min-height: 12px;
+  border-radius: 6px;
+  background-color: @omega_purple;
+}
+
+progressbar text {
+  color: @omega_text;
+}
+
+/* Grouped inventory: quiet surfaces, aligned metrics, explicit impact pills. */
+.process-toolbar {
+  background-color: @omega_bg_raised;
+  border: 1px solid @omega_border;
+  border-radius: 12px;
+  padding: 10px;
+}
+.process-group {
+  background-color: @omega_bg_raised;
+  border: 1px solid @omega_border;
+  border-radius: 12px;
+  padding: 14px;
+}
+.process-group:hover { border-color: alpha(@omega_purple, 0.5); }
+.process-group > title { padding: 2px 0; }
+.process-group > title > expander { margin-right: 10px; color: @omega_text_dim; }
+.process-metric { font-family: monospace; font-size: 0.95em; color: @omega_text_dim; }
+.impact-badge { border-radius: 20px; padding: 6px 10px; font-size: 0.9em; font-weight: 600; }
+.impact-badge.omega-heading { background-color: alpha(@omega_purple, 0.12); }
+.impact-badge.omega-warning { background-color: alpha(@omega_yellow, 0.12); }
+.impact-badge.omega-critical { background-color: alpha(@omega_red, 0.12); }
+.impact-badge.omega-dim { background-color: alpha(@omega_text_dim, 0.12); }
+button:focus-visible, entry:focus-within, expander:focus-visible {
+  outline: 2px solid @omega_purple;
+  outline-offset: 2px;
+}
+button:disabled { opacity: 0.45; }
+searchentry { border-radius: 8px; }
+.omega-card { padding: 10px; border-radius: 12px; }
+
+.process-members { border-radius: 8px; background-color: @omega_bg; }
+.process-members > row { border-bottom: 1px solid alpha(@omega_text_dim, 0.1); padding: 4px; }
+.process-members > row:last-child { border-bottom: none; }
+.process-members > row:nth-child(even) { background-color: alpha(@omega_text_dim, 0.035); }
+.impact-note { padding: 12px; border-radius: 8px; background-color: alpha(@omega_text_dim, 0.06); }
+.process-command { font-family: monospace; font-size: 0.9em; color: @omega_text_dim; }
+.process-actions { margin-top: 6px; }
+button.danger-outline { color: @omega_red; background-color: transparent; border-color: alpha(@omega_red, 0.35); }
+button.danger-outline:hover { background-color: alpha(@omega_red, 0.12); border-color: @omega_red; }
+
+.guardian-banner {
+  background-color: alpha(@omega_purple, 0.08);
+  border-left: 3px solid @omega_purple;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: @omega_text;
+}
+.guardian-banner image { color: @omega_purple; }
+
+/* Process overview: a distinct control surface within the Omega theme. */
+.process-hero {
+  background-image: linear-gradient(120deg, #291644, #171320 70%, #15151c);
+  border: 1px solid alpha(@omega_purple, 0.35);
+  border-radius: 18px;
+  padding: 20px;
+}
+.process-stat {
+  background-color: alpha(#000000, 0.22);
+  border: 1px solid alpha(@omega_purple, 0.12);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.process-stat-value { font-size: 26px; font-weight: 800; color: #e0cdff; }
+.process-stat-caption { font-size: 10px; letter-spacing: 0.6px; color: @omega_text_dim; }
+.process-page .process-group {
+  background-image: linear-gradient(to right, #211b2c, #19181f);
+  border-left: 3px solid #9b71e8;
+  border-radius: 14px;
+  padding: 16px;
+}
+.process-page .process-group:hover {
+  background-image: linear-gradient(to right, #2b213c, #201d29);
+  border-color: alpha(@omega_purple, 0.65);
+}
+.process-page .process-group.impact-feature_stops { border-left-color: #e4b963; }
+.process-page .process-group.impact-desktop_affected { border-left-color: #e4b963; }
+.process-page .process-group.impact-session_critical { border-left-color: @omega_red; }
+.process-page .process-group.impact-unknown { border-left-color: #a9a8ba; }
+.process-group-icon { background-color: alpha(@omega_purple, 0.1); padding: 12px; border-radius: 12px; }
+.process-group-name { font-size: 16px; font-weight: 700; }
+.process-group-value { font-size: 18px; font-weight: 600; color: @omega_text; }
+.process-page .impact-badge { border: 1px solid alpha(@omega_text_dim, 0.16); padding: 7px 10px; }
+.process-page .guardian-banner { padding: 8px 12px; font-size: 12px; }
+.process-page .process-members { margin-top: 8px; }
+.process-page .process-toolbar { padding: 8px; background-color: #19171f; }
+
+.process-decision {
+  background-color: alpha(@omega_purple, 0.055);
+  border: 1px solid alpha(@omega_purple, 0.16);
+  border-radius: 10px;
+  padding: 14px;
 }

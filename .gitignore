@@ -1,6 +1,7 @@
 # Local data / runtime state
 .linuxguardian/
 *.log
+!LinuxGuardianSuiteUI/tests/clamscan-sample.log
 
 # Python
 __pycache__/

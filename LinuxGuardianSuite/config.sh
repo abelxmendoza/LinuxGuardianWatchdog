@@ -8,7 +8,13 @@ LG_CHECKPOINT_DIR="$LG_HOME/checkpoints"
 LG_QUARANTINE_DIR="$LG_HOME/quarantine"
 LG_LOG_DIR="$LG_HOME/logs"
 LG_INCIDENT_DIR="$LG_HOME/incidents"
+LG_SCAN_DIR="$LG_HOME/scans"
 LG_CONFIG_FILE="$LG_HOME/config"
+
+# Quick scans skip caches, VCS metadata, and bulky SDKs/toolchains. Override
+# in ~/.linuxguardian/config. Full scans only skip /sys /proc /dev.
+LG_CLAM_EXCLUDE_DIRS_QUICK='^/sys|^/proc|^/dev|/\.cache($|/)|/\.local/share/Trash|/snap/|/node_modules/|/\.git($|/)|/\.npm($|/)|/\.rustup($|/)|/\.cargo($|/)|/nvidia/nvidia_sdk|/PX4-Autopilot|/STM32Cube($|/)|/st/stm32cubeide|/\.gz($|/)'
+LG_CLAM_EXCLUDE_DIRS_FULL='^/sys|^/proc|^/dev'
 
 LG_MONITORED_DIRS_DEFAULT="$HOME/Documents"
 LG_HONEYPOT_DIR="$HOME/Documents/Passwords_DO_NOT_OPEN"
@@ -16,7 +22,7 @@ LG_HONEYPOT_DIR="$HOME/Documents/Passwords_DO_NOT_OPEN"
 LG_LOG_FILE="$LG_LOG_DIR/linuxguardian.log"
 
 mkdir -p "$LG_BASELINE_DIR" "$LG_CHECKPOINT_DIR" "$LG_QUARANTINE_DIR" \
-         "$LG_LOG_DIR" "$LG_INCIDENT_DIR"
+         "$LG_LOG_DIR" "$LG_INCIDENT_DIR" "$LG_SCAN_DIR" "$LG_SCAN_DIR/history"
 
 # Allow the user to override any of the above in ~/.linuxguardian/config
 # shellcheck source=/dev/null

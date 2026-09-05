@@ -15,7 +15,7 @@ from linuxguardian_ui.pages.processes import ProcessesPage  # noqa: E402
 class LinuxGuardianWindow(Adw.ApplicationWindow):
     def __init__(self, app: Adw.Application) -> None:
         super().__init__(application=app, title="LinuxGuardian Watchdog")
-        self.set_default_size(1000, 640)
+        self.set_default_size(1000, 720)
 
         # Adw.ToolbarView needs libadwaita >= 1.4; build the header + content
         # layout by hand instead so this also runs on 1.1-1.3 (e.g. Ubuntu 22.04).
@@ -24,6 +24,12 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
 
         header = Adw.HeaderBar()
         root.append(header)
+
+        # "Ω" — the original theme's prompt glyph (theme_omega_black_ops.sh).
+        omega_label = Gtk.Label(label="Ω")
+        omega_label.add_css_class("omega-heading")
+        omega_label.add_css_class("title-2")
+        header.pack_start(omega_label)
 
         view_switcher = Adw.ViewSwitcher()
         header.set_title_widget(view_switcher)
