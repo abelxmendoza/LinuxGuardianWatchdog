@@ -37,11 +37,11 @@ echo "================================"
 
 # Firewall
 fw="$(lg_detect_firewall)"
-if [ "$fw" != "none" ]; then
-  check "Firewall active ($fw)" pass
-else
-  check "No active firewall detected" fail "enable ufw: sudo ufw enable"
-fi
+case "$fw" in
+  unknown) check "Firewall status could not be verified" warn "inspect with sudo ufw status verbose; preserve required remote-access rules before changes" ;;
+  none) check "No active firewall detected" warn "review required services and firewall configuration" ;;
+  *) check "Firewall front-end active ($fw)" pass "rules still require review" ;;
+esac
 
 # SSH root login
 if [ -f /etc/ssh/sshd_config ]; then
@@ -55,12 +55,23 @@ else
 fi
 
 # Automatic updates
-if command -v unattended-upgrades >/dev/null 2>&1 || dpkg -l 2>/dev/null | grep -q unattended-upgrades; then
-  check "Automatic security updates enabled (unattended-upgrades)" pass
+if command -v apt-config >/dev/null 2>&1; then
+  periodic="$(apt-config dump 2>/dev/null)"
+  if command -v unattended-upgrade >/dev/null 2>&1 &&
+      ! grep -Eq '^APT::Periodic::Enable "0";' <<< "$periodic" &&
+      grep -Eq '^APT::Periodic::Update-Package-Lists "[1-9][0-9]*";' <<< "$periodic" &&
+      grep -Eq '^APT::Periodic::Unattended-Upgrade "[1-9][0-9]*";' <<< "$periodic" &&
+      systemctl is-enabled --quiet apt-daily-upgrade.timer 2>/dev/null &&
+      systemctl is-active --quiet apt-daily-upgrade.timer 2>/dev/null; then
+    check "Automatic update settings and timer configured" pass
+  else
+    check "Automatic updates not fully verified" warn "review APT periodic settings and apt-daily-upgrade.timer"
+  fi
+  echo "Update configuration does not prove recent updates succeeded; review unattended-upgrades logs."
 elif command -v dnf >/dev/null 2>&1 && systemctl is-enabled --quiet dnf-automatic.timer 2>/dev/null; then
-  check "Automatic security updates enabled (dnf-automatic)" pass
+  check "Automatic update timer configured (dnf-automatic)" pass
 else
-  check "No automatic update mechanism detected" warn "consider unattended-upgrades / dnf-automatic"
+  check "No automatic update mechanism verified" warn "review your distribution's update settings"
 fi
 
 # LUKS / disk encryption (best-effort check)
@@ -80,10 +91,14 @@ else
 fi
 
 # Passwordless sudoers
-if command -v sudo >/dev/null 2>&1 && sudo -l -n 2>/dev/null | grep -q NOPASSWD; then
-  check "Passwordless sudo entries found for current user" warn "review /etc/sudoers.d/"
+if sudo_rules="$(sudo -l -n 2>/dev/null)"; then
+  if grep -q NOPASSWD <<< "$sudo_rules"; then
+    check "Passwordless sudo entries found for current user" warn "review /etc/sudoers.d/"
+  else
+    check "No passwordless sudo entries listed for current user" pass
+  fi
 else
-  check "No obvious passwordless sudo for current user" pass
+  check "Sudo policy could not be verified without authentication" warn "review sudo -l in a terminal"
 fi
 
 echo "================================"

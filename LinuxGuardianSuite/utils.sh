@@ -27,17 +27,33 @@ lg_require_cmd() {
 
 # Detects the system's active firewall front-end, if any.
 lg_detect_firewall() {
-  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi active; then
-    echo "ufw"
-  elif command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
-    echo "firewalld"
-  elif command -v nft >/dev/null 2>&1 && nft list ruleset 2>/dev/null | grep -q .; then
-    echo "nftables"
-  elif command -v iptables >/dev/null 2>&1 && iptables -L 2>/dev/null | grep -qv "^Chain.*(policy ACCEPT)$"; then
-    echo "iptables"
-  else
-    echo "none"
+  local status unknown=0
+  if command -v ufw >/dev/null 2>&1; then
+    if status="$(LC_ALL=C ufw status 2>/dev/null)"; then
+      if grep -Eq '^Status: active$' <<< "$status"; then
+        echo "ufw"; return
+      fi
+    else
+      unknown=1
+    fi
   fi
+  if command -v firewall-cmd >/dev/null 2>&1; then
+    if status="$(firewall-cmd --state 2>/dev/null)" && [ "$status" = "running" ]; then
+      echo "firewalld"; return
+    fi
+    unknown=1
+  fi
+  # Raw rules need interpretation; their mere presence does not prove protection.
+  if command -v nft >/dev/null 2>&1; then
+    if status="$(nft list ruleset 2>/dev/null)"; then
+      [ -z "$status" ] || unknown=1
+    else
+      unknown=1
+    fi
+  elif command -v iptables >/dev/null 2>&1; then
+    unknown=1
+  fi
+  if [ "$unknown" -eq 1 ]; then echo "unknown"; else echo "none"; fi
 }
 
 # Records a structured incident for the GUI to pick up later.

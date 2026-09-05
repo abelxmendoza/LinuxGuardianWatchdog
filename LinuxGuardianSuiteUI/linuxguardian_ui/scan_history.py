@@ -53,7 +53,11 @@ def format_last_scan(data: dict) -> tuple[str, str]:
     mode = data.get("mode") or "full"
     changed = data.get("changed_only")
     when = _when(data)
-    title = "Clean" if infected == 0 else f"{infected} infected"
+    incomplete = errors > 0 or data.get("clam_rc") not in (0, 1) or not files
+    rootkit_issue = data.get("rkhunter_rc") != 0 or bool(data.get("rkhunter_warnings"))
+    title = f"{infected} infected" if infected else (
+        "Scan needs review" if incomplete or rootkit_issue else "No detections"
+    )
     bits = [when] if when else []
     if files is not None:
         bits.append(f"{int(files):,} files")
@@ -65,6 +69,12 @@ def format_last_scan(data: dict) -> tuple[str, str]:
     if changed:
         kind = "changed-files " + kind
     bits.append(kind)
+    if incomplete:
+        bits.append("ClamAV coverage incomplete or unverified")
+    if data.get("rkhunter_rc") is None:
+        bits.append("Rootkit check not verified")
+    elif rootkit_issue:
+        bits.append("Rootkit check needs review; see its report")
     return title, " · ".join(bits)
 
 

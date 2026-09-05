@@ -40,7 +40,7 @@ def test_format_last_scan() -> None:
             "ended_epoch": 1,
         }
     )
-    assert title == "Clean"
+    assert title == "Scan needs review"
     assert "717,433 files" in detail
     assert "full scan" in detail
 
@@ -54,3 +54,16 @@ if __name__ == "__main__":
     test_parse_clam_log()
     test_format_last_scan()
     print("OK")
+
+
+def test_rootkit_failure_not_clean():
+    title, detail = format_last_scan({"files": 761, "infected": 0, "errors": 0,
+                                     "clam_rc": 0, "rkhunter_rc": 1})
+    assert title == "Scan needs review"
+    assert "Rootkit check needs review" in detail
+
+
+def test_completed_scan_no_detections():
+    title, _ = format_last_scan({"files": 10, "infected": 0, "errors": 0,
+                                "clam_rc": 0, "rkhunter_rc": 0})
+    assert title == "No detections"
