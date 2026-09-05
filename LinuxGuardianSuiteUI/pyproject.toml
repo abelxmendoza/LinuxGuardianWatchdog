@@ -1,0 +1,15 @@
+[project]
+name = "linuxguardian-ui"
+version = "0.1.0"
+description = "Native GTK4/libadwaita desktop app for LinuxGuardian Watchdog"
+requires-python = ">=3.10"
+
+[project.scripts]
+linuxguardian-ui = "linuxguardian_ui.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["linuxguardian_ui*"]

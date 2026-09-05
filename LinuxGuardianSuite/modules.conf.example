@@ -1,0 +1,8 @@
+# Copy to ~/.linuxguardian/config and edit as needed.
+# Sourced as a bash file by config.sh, so use normal shell variable syntax.
+
+# Directories to include in the file-integrity baseline (space-separated).
+# LG_MONITORED_DIRS_DEFAULT="$HOME/Documents $HOME/Projects"
+
+# Override where local state is kept.
+# LG_HOME="$HOME/.linuxguardian"

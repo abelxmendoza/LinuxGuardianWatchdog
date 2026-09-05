@@ -1,0 +1,8 @@
+# PyGObject is best installed via your distro's package manager, since it
+# links against system GTK4/libadwaita (pip wheels are unreliable for gi).
+#
+#   Debian/Ubuntu: sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+#   Fedora:        sudo dnf install python3-gobject gtk4 libadwaita
+#   Arch:          sudo pacman -S python-gobject gtk4 libadwaita
+#
+# Nothing else is required for the current app skeleton.

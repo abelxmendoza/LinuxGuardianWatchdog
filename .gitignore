@@ -1,0 +1,16 @@
+# Local data / runtime state
+.linuxguardian/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Editors
+.vscode/
+.idea/
+*.swp
