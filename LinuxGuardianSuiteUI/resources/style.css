@@ -154,16 +154,17 @@ progressbar text {
   border: 1px solid @omega_border;
   border-radius: 12px;
   padding: 14px;
+  transition: border-color 180ms ease, background-image 180ms ease;
 }
-.process-group:hover { border-color: alpha(@omega_purple, 0.5); }
+.process-group:hover { border-color: alpha(@omega_purple, 0.6); }
 .process-group > title { padding: 2px 0; }
 .process-group > title > expander { margin-right: 10px; color: @omega_text_dim; }
 .process-metric { font-family: monospace; font-size: 0.95em; color: @omega_text_dim; }
-.impact-badge { border-radius: 20px; padding: 6px 10px; font-size: 0.9em; font-weight: 600; }
-.impact-badge.omega-heading { background-color: alpha(@omega_purple, 0.12); }
-.impact-badge.omega-warning { background-color: alpha(@omega_yellow, 0.12); }
-.impact-badge.omega-critical { background-color: alpha(@omega_red, 0.12); }
-.impact-badge.omega-dim { background-color: alpha(@omega_text_dim, 0.12); }
+.impact-badge { border-radius: 20px; padding: 6px 12px; font-size: 0.9em; font-weight: 700; min-width: 100px; }
+.impact-badge.omega-heading { background-color: alpha(@omega_purple, 0.18); border: 1px solid alpha(@omega_purple, 0.5); }
+.impact-badge.omega-warning { background-color: alpha(@omega_yellow, 0.15); border: 1px solid alpha(@omega_yellow, 0.45); }
+.impact-badge.omega-critical { background-color: alpha(@omega_red, 0.18); border: 1px solid alpha(@omega_red, 0.5); }
+.impact-badge.omega-dim { background-color: alpha(@omega_text_dim, 0.1); border: 1px solid alpha(@omega_text_dim, 0.28); }
 button:focus-visible, entry:focus-within, expander:focus-visible {
   outline: 2px solid @omega_purple;
   outline-offset: 2px;
@@ -173,9 +174,10 @@ searchentry { border-radius: 8px; }
 .omega-card { padding: 10px; border-radius: 12px; }
 
 .process-members { border-radius: 8px; background-color: @omega_bg; }
-.process-members > row { border-bottom: 1px solid alpha(@omega_text_dim, 0.1); padding: 4px; }
+.process-members > row { border-bottom: 1px solid alpha(@omega_text_dim, 0.1); padding: 4px; transition: background-color 120ms ease; }
 .process-members > row:last-child { border-bottom: none; }
 .process-members > row:nth-child(even) { background-color: alpha(@omega_text_dim, 0.035); }
+.process-members > row:hover { background-color: alpha(@omega_purple, 0.1); }
 .impact-note { padding: 12px; border-radius: 8px; background-color: alpha(@omega_text_dim, 0.06); }
 .process-command { font-family: monospace; font-size: 0.9em; color: @omega_text_dim; }
 .process-actions { margin-top: 6px; }
@@ -233,4 +235,45 @@ button.danger-outline:hover { background-color: alpha(@omega_red, 0.12); border-
   border: 1px solid alpha(@omega_purple, 0.16);
   border-radius: 10px;
   padding: 14px;
+}
+
+/* ── Section headers with left purple accent ───────────────────────────── */
+.omega-section-header {
+  border-left: 3px solid @omega_purple;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 14px;
+  background-color: alpha(@omega_purple, 0.07);
+}
+.omega-section-title {
+  color: @omega_purple;
+  font-weight: 800;
+}
+.omega-section-count {
+  color: @omega_text_dim;
+  font-size: smaller;
+}
+
+/* ── CPU / MEM metric chips ────────────────────────────────────────────── */
+.omega-metric {
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: smaller;
+  font-weight: 700;
+  min-width: 72px;
+}
+.omega-metric-dim {
+  background-color: alpha(@omega_text_dim, 0.1);
+  color: @omega_text_dim;
+}
+.omega-metric-normal {
+  background-color: alpha(@omega_purple, 0.18);
+  color: @omega_purple;
+}
+.omega-metric-warning {
+  background-color: alpha(@omega_yellow, 0.16);
+  color: @omega_yellow;
+}
+.omega-metric-critical {
+  background-color: alpha(@omega_red, 0.2);
+  color: @omega_red;
 }

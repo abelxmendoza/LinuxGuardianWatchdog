@@ -46,6 +46,34 @@ SECTION_FOR_GROUP = {
 }
 
 
+def _make_metric_chip(label: str, css_class: str) -> Gtk.Box:
+    chip = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+    chip.add_css_class("omega-metric")
+    chip.add_css_class(css_class)
+    chip.append(Gtk.Label(label=label))
+    return chip
+
+
+def _cpu_chip_class(pct: float) -> str:
+    if pct > 50:
+        return "omega-metric-critical"
+    if pct > 20:
+        return "omega-metric-warning"
+    if pct > 5:
+        return "omega-metric-normal"
+    return "omega-metric-dim"
+
+
+def _mem_chip_class(pct: float) -> str:
+    if pct > 15:
+        return "omega-metric-critical"
+    if pct > 5:
+        return "omega-metric-warning"
+    if pct > 1:
+        return "omega-metric-normal"
+    return "omega-metric-dim"
+
+
 class ProcessesPage(Gtk.Box):
     def __init__(self, toast_overlay: Adw.ToastOverlay) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -282,15 +310,16 @@ class ProcessesPage(Gtk.Box):
 
     def _build_section(self, title: str, groups: list[dict]) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        section_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        heading = Gtk.Label(label=title, xalign=0, hexpand=True)
-        heading.add_css_class("omega-heading")
-        heading.add_css_class("title-4")
-        section_header.append(heading)
-        count = Gtk.Label(label=f"{len(groups)} group{'s' if len(groups) != 1 else ''}")
-        count.add_css_class("omega-dim")
-        section_header.append(count)
-        box.append(section_header)
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, valign=Gtk.Align.CENTER)
+        header.add_css_class("omega-section-header")
+        title_lbl = Gtk.Label(label=title, xalign=0)
+        title_lbl.add_css_class("omega-section-title")
+        header.append(title_lbl)
+        n = len(groups)
+        count_lbl = Gtk.Label(label=f"— {n} group{'s' if n != 1 else ''}", xalign=0)
+        count_lbl.add_css_class("omega-section-count")
+        header.append(count_lbl)
+        box.append(header)
         for group in groups:
             box.append(self._build_group_expander(group))
         return box
@@ -324,16 +353,9 @@ class ProcessesPage(Gtk.Box):
         description.add_css_class("omega-dim")
         identity.append(description)
         header.append(identity)
-        for value, caption in ((group["cpu"], "CPU"), (group["mem"], "MEMORY")):
-            metric_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, valign=Gtk.Align.CENTER)
-            metric = Gtk.Label(label=f"{value:.1f}%", width_chars=7, xalign=1)
-            metric.add_css_class("process-group-value")
-            metric_box.append(metric)
-            caption_label = Gtk.Label(label=caption, xalign=1)
-            caption_label.add_css_class("process-stat-caption")
-            metric_box.append(caption_label)
-            header.append(metric_box)
-        impact_badge = Gtk.Label(label=IMPACT_LABELS.get(impact, "Unknown"), width_chars=16)
+        header.append(_make_metric_chip(f"{group['cpu']:.1f}%  CPU", _cpu_chip_class(group["cpu"])))
+        header.append(_make_metric_chip(f"{group['mem']:.1f}%  MEM", _mem_chip_class(group["mem"])))
+        impact_badge = Gtk.Label(label=IMPACT_LABELS.get(impact, "Unknown"), width_chars=14)
         impact_badge.set_valign(Gtk.Align.CENTER)
         impact_badge.add_css_class("impact-badge")
         impact_badge.add_css_class(IMPACT_CSS.get(impact, "omega-dim"))
@@ -420,10 +442,8 @@ class ProcessesPage(Gtk.Box):
         title.set_tooltip_text(proc.get("name") or proc["comm"])
         title.add_css_class("heading")
         top.append(title)
-        for key, caption in (("cpu", "CPU"), ("mem", "MEM")):
-            metric = Gtk.Label(label=f"{proc[key]:.1f}% {caption}", width_chars=11, xalign=1)
-            metric.add_css_class("process-metric")
-            top.append(metric)
+        top.append(_make_metric_chip(f"{proc['cpu']:.1f}%  CPU", _cpu_chip_class(proc["cpu"])))
+        top.append(_make_metric_chip(f"{proc['mem']:.1f}%  MEM", _mem_chip_class(proc["mem"])))
 
         simple = proc.get("purpose") or ""
         if proc.get("listening"):
@@ -609,7 +629,7 @@ class ProcessesPage(Gtk.Box):
             return False
 
         for pid in pids:
-            args = ["--kill", pid]
+            args = ["--kill", str(pid)]
             if force:
                 args.append("--force")
             run_sync_async("linux_process_manager.sh", args, on_one_done)
