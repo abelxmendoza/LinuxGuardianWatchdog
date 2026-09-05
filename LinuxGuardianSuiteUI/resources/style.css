@@ -1,0 +1,123 @@
+/* "Omega Black-Ops" theme — ported from MacGuardianWatchdog's terminal
+ * theme (theme_omega_black_ops.sh) so the Linux GUI matches the original's
+ * dark, purple/red/yellow security-suite look. */
+
+@define-color omega_bg #0d0d0d;
+@define-color omega_bg_raised #161616;
+@define-color omega_bg_row_alt #131313;
+@define-color omega_border alpha(#8c00ff, 0.35);
+@define-color omega_text #e5e5e5;
+@define-color omega_text_dim #9a9a9a;
+@define-color omega_purple #8c00ff;
+@define-color omega_red #ff1100;
+@define-color omega_yellow #ffe600;
+
+window, .background {
+  background-color: @omega_bg;
+  color: @omega_text;
+}
+
+headerbar {
+  background-color: @omega_bg_raised;
+  color: @omega_text;
+  border-bottom: 1px solid @omega_border;
+  box-shadow: none;
+}
+
+headerbar windowcontrols button {
+  color: @omega_text;
+}
+
+viewswitcher button {
+  color: @omega_text_dim;
+}
+
+viewswitcher button:checked {
+  color: @omega_purple;
+}
+
+button {
+  background-color: @omega_bg_raised;
+  color: @omega_text;
+  border: 1px solid @omega_border;
+  border-radius: 6px;
+}
+
+button:hover {
+  border-color: @omega_purple;
+}
+
+button.suggested-action {
+  background-color: @omega_purple;
+  color: #ffffff;
+  border: none;
+}
+
+button.suggested-action:hover {
+  background-color: shade(@omega_purple, 1.15);
+}
+
+button.destructive-action {
+  background-color: @omega_red;
+  color: #ffffff;
+  border: none;
+}
+
+button.destructive-action:hover {
+  background-color: shade(@omega_red, 1.15);
+}
+
+textview, textview text {
+  background-color: @omega_bg_raised;
+  color: @omega_text;
+  font-family: monospace;
+}
+
+entry {
+  background-color: @omega_bg_raised;
+  color: @omega_text;
+  border: 1px solid @omega_border;
+}
+
+list, listview {
+  background-color: transparent;
+}
+
+row {
+  color: @omega_text;
+}
+
+row:nth-child(even) {
+  background-color: @omega_bg_row_alt;
+}
+
+.omega-card {
+  background-color: @omega_bg_raised;
+  border: 1px solid @omega_border;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.omega-warning {
+  color: @omega_yellow;
+}
+
+.omega-critical {
+  color: @omega_red;
+  font-weight: bold;
+}
+
+.omega-dim {
+  color: @omega_text_dim;
+}
+
+.omega-heading {
+  color: @omega_purple;
+  font-weight: bold;
+}
+
+toast {
+  background-color: @omega_bg_raised;
+  color: @omega_text;
+  border: 1px solid @omega_border;
+}

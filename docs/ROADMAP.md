@@ -8,6 +8,8 @@ macOS original's feature set:
 - [x] `linux_watchdog.sh` — SHA-256 integrity baseline + honeypot
 - [x] `linux_guardian.sh` — ClamAV + rkhunter scan orchestration
 - [x] `linux_security_audit.sh` — scored posture checks (firewall, SSH, updates, sudoers)
+- [x] `linux_process_manager.sh` — process killer (list, SIGTERM/SIGKILL by PID or name)
+- [x] `linux_cache_cleanup.sh` — cache cleaner (browser + system caches, dry-run by default)
 - [ ] `linux_blueteam.sh` — process/network anomaly detection
 - [ ] `linux_remediation.sh` — dry-run-first quarantine & fix suggestions
 - [ ] `threat_intel_feeds.sh` — Abuse.ch / URLhaus IOC matching
@@ -17,9 +19,13 @@ macOS original's feature set:
 - [ ] Email/webhook alerting module
 
 ## Phase 3 — Native GUI (GTK4 + libadwaita)
-- [x] App shell, sidebar navigation, dashboard page stub
-- [ ] Wire dashboard buttons to real script execution + live output pane
-- [ ] Scan history / incident view
+- [x] App shell, view switcher, dashboard page wired to real scripts + live output pane
+- [x] "Omega Black-Ops" theme (dark bg, purple/red/yellow accents) ported from the
+      macOS original's `theme_omega_black_ops.sh` terminal theme
+- [x] Processes page — the process killer (list, filter, sort, End/Force Kill with confirm dialog)
+- [x] Cache Cleaner page — scan + clear with size preview and confirm dialog
+- [ ] Scan history / incident timeline view (incidents are already recorded to
+      `~/.linuxguardian/incidents/*.json` by every script — just needs a page)
 - [ ] Settings page (monitored paths, schedule, thresholds)
 - [ ] System tray / background indicator (via `AppIndicator3` or GNOME Shell extension)
 - [ ] Packaging: Flatpak manifest, and/or `.deb`/AUR package

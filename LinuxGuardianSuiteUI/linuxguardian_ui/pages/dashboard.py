@@ -41,7 +41,7 @@ class DashboardPage(Gtk.Box):
         self.append(scroller)
 
         self.output_view = Gtk.TextView(editable=False, monospace=True)
-        self.output_view.add_css_class("card")
+        self.output_view.add_css_class("omega-card")
         scroller.set_child(self.output_view)
         self.buffer = self.output_view.get_buffer()
 

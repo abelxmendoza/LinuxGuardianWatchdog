@@ -5,9 +5,11 @@ A free, integrated security platform for Linux desktops — a native port of
 rebuilt for the Linux desktop instead of macOS.
 
 Same idea as the original: real security tools (not just a UI) in one place —
-antivirus scanning, rootkit detection, file integrity monitoring, security
-posture auditing, and automated remediation — orchestrated by a native
-desktop app, with all data kept local to the machine.
+antivirus scanning, rootkit detection, file integrity monitoring, a process
+killer, a cache cleaner, security posture auditing, and automated
+remediation — orchestrated by a native desktop app, with all data kept local
+to the machine. The GUI also carries over the original's dark "Omega
+Black-Ops" theme (purple/red/yellow accents on near-black).
 
 > **Status: scaffold / early bootstrap.** This is the initial skeleton —
 > directory layout, a working core script or two, and a minimal native UI
@@ -40,6 +42,8 @@ LinuxGuardianWatchdog/
 │   ├── linux_guardian.sh     # ClamAV + rkhunter scan orchestration
 │   ├── linux_watchdog.sh     # SHA-256 file integrity baseline + honeypot
 │   ├── linux_security_audit.sh  # Scored security posture checks
+│   ├── linux_process_manager.sh # Process killer: list, SIGTERM/SIGKILL by PID or name
+│   ├── linux_cache_cleanup.sh   # Cache cleaner: browser + system caches, dry-run by default
 │   ├── install_scheduler.sh  # Installs systemd user timers for automation
 │   └── modules.conf.example
 ├── LinuxGuardianSuiteUI/     # Native GTK4 / libadwaita desktop app (Python)
@@ -60,9 +64,13 @@ LinuxGuardianWatchdog/
 
 ```bash
 cd LinuxGuardianSuite
-./linux_watchdog.sh --init      # create the file-integrity baseline
-./linux_guardian.sh --scan      # run a ClamAV + rkhunter scan
-./linux_security_audit.sh       # scored security posture check
+./linux_watchdog.sh --init                 # create the file-integrity baseline
+./linux_guardian.sh --scan                 # run a ClamAV + rkhunter scan
+./linux_security_audit.sh                  # scored security posture check
+./linux_process_manager.sh --list          # process killer: list processes
+./linux_process_manager.sh --kill PID      # ...or --kill-name NAME [--force]
+./linux_cache_cleanup.sh --scan            # cache cleaner: preview reclaimable space
+./linux_cache_cleanup.sh --clean --apply   # ...actually clear it
 ```
 
 ## Getting started (GUI)

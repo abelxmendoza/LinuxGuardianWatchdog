@@ -48,3 +48,26 @@ alter the system support `--dry-run` (default) and require an explicit
 - **PyGObject** — Python bindings for GTK4/libadwaita, chosen over C for
   faster iteration while prototyping; a future native rewrite (C or Vala)
   is possible once the feature set stabilizes
+
+## Theme: "Omega Black-Ops"
+
+Ported from the macOS original's terminal theme (`theme_omega_black_ops.sh`):
+near-black background (`#0d0d0d`), light-gray text (`#e5e5e5`), purple accent
+(`#8c00ff`) for primary/suggested actions, red (`#ff1100`) for destructive
+actions and critical status, yellow (`#ffe600`) for warnings. Defined in
+`LinuxGuardianSuiteUI/resources/style.css` as GTK4 CSS (`@define-color` +
+selectors targeting libadwaita's built-in style classes like
+`.suggested-action`/`.destructive-action`), loaded and forced to dark mode in
+`main.py` regardless of the system's light/dark setting — the original is a
+deliberately dark security-suite look, not a system-theme follower.
+
+## Compatibility notes
+
+This targets libadwaita **1.1+** (Ubuntu 22.04's version), not just the
+latest. That ruled out a couple of newer widgets during development:
+`Adw.ToolbarView` and `Adw.MessageDialog` need 1.4/1.2 respectively and
+aren't used here — `window.py` builds the header/content layout by hand
+with a plain `Gtk.Box`, and `dialogs.py` has a small hand-rolled confirm
+dialog instead. If you're developing against a newer libadwaita and want to
+adopt those, gate it behind a version check rather than replacing them
+outright, so older systems don't break.

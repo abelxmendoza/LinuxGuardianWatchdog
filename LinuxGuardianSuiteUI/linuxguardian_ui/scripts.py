@@ -19,6 +19,18 @@ def script_path(name: str) -> Path:
     return path
 
 
+def run_sync(name: str, *args: str, timeout: float = 15.0) -> tuple[int, list[str]]:
+    """Run a suite script to completion and return (exit_code, stdout_lines)."""
+    proc = subprocess.run(
+        [str(script_path(name)), *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=timeout,
+    )
+    return proc.returncode, proc.stdout.splitlines()
+
+
 def run_streaming(name: str, *args: str) -> Iterator[str]:
     """Run a suite script and yield its combined stdout/stderr line by line."""
     proc = subprocess.Popen(
@@ -57,5 +69,30 @@ def run_streaming_async(
         except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
             GLib.idle_add(on_line, f"[error] {exc}")
             GLib.idle_add(on_done, 1)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def run_sync_async(
+    name: str,
+    args: list[str],
+    on_done: Callable[[int, list[str]], None],
+    timeout: float = 15.0,
+) -> None:
+    """Background-thread variant of `run_sync`; calls `on_done` on the main loop."""
+    import threading
+
+    from gi.repository import GLib
+
+    def worker() -> None:
+        try:
+            code, lines = run_sync(name, *args, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            GLib.idle_add(on_done, 1, [f"[error] timed out after {timeout:.0f}s"])
+            return
+        except Exception as exc:  # noqa: BLE001 - surface any failure to the UI
+            GLib.idle_add(on_done, 1, [f"[error] {exc}"])
+            return
+        GLib.idle_add(on_done, code, lines)
 
     threading.Thread(target=worker, daemon=True).start()
