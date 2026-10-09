@@ -32,6 +32,8 @@ Type=oneshot
 ExecStart=$SCRIPT_DIR/linux_guardian.sh --scan %h
 ExecStartPost=$SCRIPT_DIR/linux_watchdog.sh --check
 ExecStartPost=-$SCRIPT_DIR/linux_exposure.sh --record
+ExecStartPost=-$SCRIPT_DIR/linux_security_audit.sh
+ExecStartPost=-$SCRIPT_DIR/notify_events.py --send
 EOF
 
   cat > "$UNIT_DIR/$TIMER_NAME" <<EOF

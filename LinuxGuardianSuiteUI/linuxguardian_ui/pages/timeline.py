@@ -16,6 +16,7 @@ from gi.repository import Adw, Gtk, Pango  # noqa: E402
 from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.components import page_header, section_header  # noqa: E402
 
+import notify_events as ne  # noqa: E402
 import timeline as tl  # noqa: E402
 
 SEV_LABEL = {"critical": "Critical", "warning": "Warning", "info": "Routine"}
@@ -72,6 +73,16 @@ class TimelinePage(Gtk.Box):
         refresh = Gtk.Button(label="Refresh")
         refresh.connect("clicked", lambda _b: self.refresh())
         bar.append(refresh)
+
+        notify_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.append(notify_row)
+        self.notify_switch = Gtk.Switch(active=ne.is_enabled(), valign=Gtk.Align.CENTER)
+        self.notify_switch.connect("notify::active", self._on_notify_toggled)
+        notify_row.append(self.notify_switch)
+        notify_row.append(Gtk.Label(label="Desktop notifications for new warnings and critical findings", xalign=0, hexpand=True))
+        test = Gtk.Button(label="Send test")
+        test.connect("clicked", self._on_test_notification)
+        notify_row.append(test)
 
         scroller = Gtk.ScrolledWindow(vexpand=True)
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -177,3 +188,10 @@ class TimelinePage(Gtk.Box):
         else:
             tl.acknowledge(entry.key)
         self.refresh(rebuild_categories=False)
+
+    def _on_notify_toggled(self, switch: Gtk.Switch, _pspec: object) -> None:
+        ne.set_enabled(switch.get_active())
+
+    def _on_test_notification(self, _btn: Gtk.Button) -> None:
+        ok = ne.send_notification("LinuxGuardian: test", "Notifications are working. New security findings will show up here.")
+        self._toast_overlay.add_toast(Adw.Toast.new("Test notification sent" if ok else "Could not send: is a notification service running?"))
