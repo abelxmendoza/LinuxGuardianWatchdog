@@ -8,7 +8,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from linuxguardian_ui.window import LinuxGuardianWindow  # noqa: E402
 
@@ -28,10 +28,24 @@ def _load_omega_theme() -> None:
     )
 
 
+ICON_NAME = "linuxguardian-watchdog"
+ICON_DIR = Path(__file__).resolve().parents[1] / "resources" / "icons"
+
+
+def _register_icon() -> None:
+    """Window/taskbar icon even when the app is run from the repo without being installed."""
+    display = Gdk.Display.get_default()
+    if display is not None:
+        Gtk.IconTheme.get_for_display(display).add_search_path(str(ICON_DIR))
+    Gtk.Window.set_default_icon_name(ICON_NAME)
+
+
 def main() -> int:
+    GLib.set_prgname(ICON_NAME)          # the dock matches windows to linuxguardian-watchdog.desktop by this name
     app = Adw.Application(application_id=APP_ID)
 
     def on_activate(app: Adw.Application) -> None:
+        _register_icon()
         _load_omega_theme()
         win = LinuxGuardianWindow(app)
         win.present()

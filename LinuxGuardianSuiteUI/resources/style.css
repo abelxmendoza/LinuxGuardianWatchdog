@@ -5,15 +5,19 @@
  * theme (theme_omega_black_ops.sh) so the Linux GUI matches the original's
  * dark, purple/red/yellow security-suite look. */
 
-@define-color omega_bg #000000;
-@define-color omega_bg_raised #1a1a1a;
-@define-color omega_bg_row_alt #202020;
-@define-color omega_border alpha(#b5a4e8, 0.18);
-@define-color omega_text #e6e6e6;
-@define-color omega_text_dim #a9a8ba;
-@define-color omega_purple #b69aff;
-@define-color omega_red #ff7d8d;
-@define-color omega_yellow #edc777;
+/* Palette sampled from the wolf logo (images/LinuxGuardianLogo.png):
+ * near-black violet ground, neon-violet outline, amber eyes, ember-orange glow. */
+@define-color omega_bg #07030d;
+@define-color omega_bg_raised #130b1f;
+@define-color omega_bg_row_alt #180e27;
+@define-color omega_border alpha(#a94cf0, 0.24);
+@define-color omega_text #ece6f5;
+@define-color omega_text_dim #a79bbd;
+@define-color omega_purple #c196ff;      /* readable text/accent purple */
+@define-color omega_violet #9d2fe0;      /* the logo's outline, for fills and glows */
+@define-color omega_orange #ff7a1f;      /* the "WATCHDOG" ember */
+@define-color omega_red #ff6b7f;
+@define-color omega_yellow #ffb92e;      /* the eyes */
 
 window, .background {
   background-color: @omega_bg;
@@ -21,11 +25,16 @@ window, .background {
 }
 
 headerbar {
-  background-color: @omega_bg_raised;
+  background-image: linear-gradient(to bottom, #1b0f2e, #110a1c);
   color: @omega_text;
-  border-bottom: 1px solid @omega_border;
-  box-shadow: none;
+  border-bottom: 1px solid alpha(@omega_violet, 0.45);
+  box-shadow: 0 1px 14px alpha(@omega_violet, 0.18);
 }
+
+/* Brand lockup: wolf mark + "LinuxGuardian" over spaced-out "WATCHDOG", as in the logo. */
+.brand-mark { filter: drop-shadow(0 0 6px alpha(#9d2fe0, 0.6)); }
+.brand-name { color: @omega_purple; font-weight: 800; font-size: 14px; letter-spacing: 0.4px; }
+.brand-sub  { color: @omega_orange; font-weight: 700; font-size: 8px; letter-spacing: 3px; }
 
 headerbar windowcontrols button {
   color: @omega_text;
@@ -37,6 +46,8 @@ viewswitcher button {
 
 viewswitcher button:checked {
   color: @omega_purple;
+  border-bottom: 2px solid @omega_orange;
+  background-image: linear-gradient(to top, alpha(@omega_violet, 0.22), transparent);
 }
 
 button {
@@ -51,13 +62,15 @@ button:hover {
 }
 
 button.suggested-action {
-  background-color: #8c00ff;
+  background-image: linear-gradient(135deg, #7a1cc8, #a63ee8);
   color: #ffffff;
   border: none;
+  box-shadow: 0 0 14px alpha(@omega_violet, 0.35);
 }
 
 button.suggested-action:hover {
-  background-color: shade(@omega_purple, 1.15);
+  background-image: linear-gradient(135deg, #8d2ae0, #bd57ff);
+  box-shadow: 0 0 20px alpha(@omega_violet, 0.55);
 }
 
 button.destructive-action {
@@ -135,7 +148,7 @@ progressbar > trough {
 progressbar > trough > progress {
   min-height: 12px;
   border-radius: 6px;
-  background-color: @omega_purple;
+  background-image: linear-gradient(to right, @omega_violet, @omega_orange);
 }
 
 progressbar text {
@@ -195,7 +208,7 @@ button.danger-outline:hover { background-color: alpha(@omega_red, 0.12); border-
 
 /* Process overview: a distinct control surface within the Omega theme. */
 .process-hero {
-  background-image: linear-gradient(120deg, #291644, #171320 70%, #15151c);
+  background-image: linear-gradient(120deg, #2d1250, #150c24 70%, #0f0a18);
   border: 1px solid alpha(@omega_purple, 0.35);
   border-radius: 18px;
   padding: 20px;
@@ -206,20 +219,20 @@ button.danger-outline:hover { background-color: alpha(@omega_red, 0.12); border-
   border-radius: 10px;
   padding: 12px 14px;
 }
-.process-stat-value { font-size: 26px; font-weight: 800; color: #e0cdff; }
+.process-stat-value { font-size: 26px; font-weight: 800; color: #e6d2ff; }
 .process-stat-caption { font-size: 10px; letter-spacing: 0.6px; color: @omega_text_dim; }
 .process-page .process-group {
-  background-image: linear-gradient(to right, #211b2c, #19181f);
-  border-left: 3px solid #9b71e8;
+  background-image: linear-gradient(to right, #1f1233, #140d20);
+  border-left: 3px solid @omega_violet;
   border-radius: 14px;
   padding: 16px;
 }
 .process-page .process-group:hover {
-  background-image: linear-gradient(to right, #2b213c, #201d29);
+  background-image: linear-gradient(to right, #2a1946, #1a1029);
   border-color: alpha(@omega_purple, 0.65);
 }
-.process-page .process-group.impact-feature_stops { border-left-color: #e4b963; }
-.process-page .process-group.impact-desktop_affected { border-left-color: #e4b963; }
+.process-page .process-group.impact-feature_stops { border-left-color: @omega_orange; }
+.process-page .process-group.impact-desktop_affected { border-left-color: @omega_yellow; }
 .process-page .process-group.impact-session_critical { border-left-color: @omega_red; }
 .process-page .process-group.impact-unknown { border-left-color: #a9a8ba; }
 .process-group-icon { background-color: alpha(@omega_purple, 0.1); padding: 12px; border-radius: 12px; }
@@ -228,7 +241,7 @@ button.danger-outline:hover { background-color: alpha(@omega_red, 0.12); border-
 .process-page .impact-badge { border: 1px solid alpha(@omega_text_dim, 0.16); padding: 7px 10px; }
 .process-page .guardian-banner { padding: 8px 12px; font-size: 12px; }
 .process-page .process-members { margin-top: 8px; }
-.process-page .process-toolbar { padding: 8px; background-color: #19171f; }
+.process-page .process-toolbar { padding: 8px; background-color: #130b1f; }
 
 .process-decision {
   background-color: alpha(@omega_purple, 0.055);
@@ -277,3 +290,13 @@ button.danger-outline:hover { background-color: alpha(@omega_red, 0.12); border-
   background-color: alpha(@omega_red, 0.2);
   color: @omega_red;
 }
+
+/* ── Brand touches ─────────────────────────────────────────────────────── */
+.omega-card { box-shadow: 0 2px 16px alpha(#000000, 0.45), inset 0 1px 0 alpha(@omega_violet, 0.12); }
+.omega-section-header { border-left-color: @omega_orange; background-image: linear-gradient(to right, alpha(@omega_violet, 0.14), transparent); }
+.guardian-banner { border-left-color: @omega_orange; background-color: alpha(@omega_orange, 0.07); }
+.guardian-banner image { color: @omega_orange; }
+.title-1 { text-shadow: 0 0 18px alpha(@omega_violet, 0.35); }
+scrollbar slider { background-color: alpha(@omega_violet, 0.5); border-radius: 6px; }
+scrollbar slider:hover { background-color: @omega_violet; }
+check:checked, radio:checked { background-color: @omega_violet; border-color: @omega_violet; color: #ffffff; }

@@ -5,11 +5,15 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+
+from linuxguardian_ui.components import LOGO_FULL, brand_lockup  # noqa: E402
 
 from linuxguardian_ui.pages.cache_cleaner import CacheCleanerPage  # noqa: E402
 from linuxguardian_ui.pages.dashboard import DashboardPage  # noqa: E402
+from linuxguardian_ui.pages.exposure import ExposurePage  # noqa: E402
 from linuxguardian_ui.pages.processes import ProcessesPage  # noqa: E402
+from linuxguardian_ui.pages.updates import UpdatesPage  # noqa: E402
 
 
 class LinuxGuardianWindow(Adw.ApplicationWindow):
@@ -25,11 +29,13 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         root.append(header)
 
-        # "Ω" — the original theme's prompt glyph (theme_omega_black_ops.sh).
-        omega_label = Gtk.Label(label="Ω")
-        omega_label.add_css_class("omega-heading")
-        omega_label.add_css_class("title-2")
-        header.pack_start(omega_label)
+        header.pack_start(brand_lockup())
+
+        about_btn = Gtk.Button(icon_name="help-about-symbolic")
+        about_btn.add_css_class("flat")
+        about_btn.set_tooltip_text("About LinuxGuardian Watchdog")
+        about_btn.connect("clicked", self._show_about)
+        header.pack_end(about_btn)
 
         view_switcher = Adw.ViewSwitcher()
         header.set_title_widget(view_switcher)
@@ -55,4 +61,26 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
             CacheCleanerPage(self.toast_overlay), "cache", "Cache Cleaner"
         )
         cache_page.set_icon_name("user-trash-symbolic")
+
+        updates_page = stack.add_titled(
+            UpdatesPage(self.toast_overlay), "updates", "Updates"
+        )
+        updates_page.set_icon_name("software-update-available-symbolic")
+
+        exposure_page = stack.add_titled(
+            ExposurePage(self.toast_overlay), "exposure", "Exposure"
+        )
+        exposure_page.set_icon_name("network-wired-symbolic")
         # Future pages: incidents history, settings — see docs/ROADMAP.md
+
+    def _show_about(self, _btn: Gtk.Button) -> None:
+        about = Gtk.AboutDialog(transient_for=self, modal=True)
+        about.set_program_name("LinuxGuardian Watchdog")
+        about.set_comment("A native Linux security suite: scans, updates, exposure and process control, all local.")
+        about.set_license_type(Gtk.License.MIT_X11)
+        about.set_website("https://github.com/abelxmendoza/LinuxGuardianWatchdog")
+        try:
+            about.set_logo(Gdk.Texture.new_from_filename(str(LOGO_FULL)))
+        except Exception:  # noqa: BLE001 - a missing logo must not break About
+            about.set_logo_icon_name("linuxguardian-watchdog")
+        about.present()

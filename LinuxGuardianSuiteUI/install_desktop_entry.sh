@@ -12,17 +12,31 @@ APP_ID="linuxguardian-watchdog"
 APPS_DIR="$HOME/.local/share/applications"
 DESKTOP_FILE="$APPS_DIR/$APP_ID.desktop"
 
-usage() { grep '^#' "$0" | sed 's/^# \{0,1\}//;1d'; }
+usage() { awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"; }
+ICON_NAME="linuxguardian-watchdog"
+ICON_SRC="$APP_DIR/resources/icons/hicolor"
+ICON_DEST="$HOME/.local/share/icons/hicolor"
 
 install_entry() {
   mkdir -p "$APPS_DIR"
+  # Install the wolf icon into the user icon theme so the dock, app menu and window all agree.
+  if [ -d "$ICON_SRC" ]; then
+    local d size
+    for d in "$ICON_SRC"/*x*/apps; do
+      size="$(basename "$(dirname "$d")")"
+      mkdir -p "$ICON_DEST/$size/apps"
+      cp "$d/$ICON_NAME.png" "$ICON_DEST/$size/apps/$ICON_NAME.png"
+    done
+    command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f -t "$ICON_DEST" >/dev/null 2>&1
+  fi
   cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Type=Application
 Name=LinuxGuardian Watchdog
 Comment=Native Linux security suite - antivirus, integrity monitoring, security audit
 Exec=$APP_DIR/run_ui.sh
-Icon=$APP_DIR/resources/linuxguardian.svg
+Icon=$ICON_NAME
+StartupWMClass=$ICON_NAME
 Terminal=false
 Categories=System;Security;Utility;
 StartupNotify=true
@@ -63,6 +77,7 @@ PYEOF
 
 uninstall_entry() {
   rm -f "$DESKTOP_FILE"
+  find "$ICON_DEST" -name "$ICON_NAME.png" -delete 2>/dev/null
   local desk
   desk="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
   rm -f "$desk/LinuxGuardian Watchdog.desktop"
