@@ -106,7 +106,9 @@ def rkhunter_status(now: float | None = None) -> dict:
         pass
     scan = last_scan()
     last_check = None
+    last_warnings = 0
     if scan:
+        last_warnings = int(scan.get("rkhunter_warnings") or 0) if scan.get("rootkit_check") == "ran" else 0
         last_check = scan.get("rootkit_check")
         if last_check is None:
             report = scan.get("rk_report")
@@ -117,6 +119,7 @@ def rkhunter_status(now: float | None = None) -> dict:
         "baseline_epoch": baseline_epoch,
         "baseline_age_sec": None if baseline_epoch is None else max(0, int(now - baseline_epoch)),
         "last_check": last_check,
+        "last_warnings": last_warnings,
     }
 
 
@@ -168,8 +171,13 @@ def describe(health: dict) -> list[dict]:
         base = (f"baseline from {fmt_age(r['baseline_age_sec'])}" if r["baseline_present"]
                 else "no baseline database found")
         last = _LAST_CHECK_TEXT.get(r["last_check"], str(r["last_check"]))
-        rows.append({"key": "rootkit", "label": "Rootkit scanner", "text": f"{base}, {last}",
-                     "level": "ok" if r["last_check"] == "ran" else "warning"})
+        row = {"key": "rootkit", "label": "Rootkit scanner", "text": f"{base}, {last}",
+               "level": "ok" if r["last_check"] == "ran" else "warning"}
+        if r["last_check"] == "ran" and r.get("last_warnings"):
+            row["text"] = f"{base}, last check ran with {r['last_warnings']} warning(s)"
+            row["level"] = "warning"
+            row["action"] = "review_baseline"      # the UI offers the previewed, gated refresh
+        rows.append(row)
     return rows
 
 

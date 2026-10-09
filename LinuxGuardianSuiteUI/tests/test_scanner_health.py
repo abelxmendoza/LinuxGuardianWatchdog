@@ -201,3 +201,18 @@ def test_the_cli_the_dashboard_calls_really_works(tmp_path, monkeypatch):
     data = json.loads(subprocess.run([str(script), "--json"], capture_output=True, text=True, env=env).stdout)
     assert set(data) == {"definitions", "freshclam", "rkhunter"}
     assert sh.describe(data)                     # the UI's own consumer accepts it
+
+
+def test_a_rootkit_check_with_warnings_offers_the_baseline_review(clam, tmp_path, monkeypatch):
+    health = _health(clam, active=True, last="ran")
+    assert "action" not in [r for r in sh.describe(health) if r["key"] == "rootkit"][0]
+    health["rkhunter"]["last_warnings"] = 5
+    row = [r for r in sh.describe(health) if r["key"] == "rootkit"][0]
+    assert row["action"] == "review_baseline" and row["level"] == "warning" and "5 warning" in row["text"]
+
+
+def test_last_warnings_only_count_when_the_check_really_ran(tmp_path, monkeypatch):
+    write_last(tmp_path, monkeypatch, {"rootkit_check": "needs_root", "rkhunter_warnings": 9})
+    assert sh.rkhunter_status(NOW)["last_warnings"] == 0
+    write_last(tmp_path / "b", monkeypatch, {"rootkit_check": "ran", "rkhunter_warnings": 9})
+    assert sh.rkhunter_status(NOW)["last_warnings"] == 9

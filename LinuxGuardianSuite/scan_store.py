@@ -77,11 +77,25 @@ def parse_clam_log(path: Path) -> dict:
     return result
 
 
+def _summary_number(text: str, label: str) -> int:
+    match = re.search(rf"^[\t ]*{label}\s*:\s*(\d+)", text, re.M | re.I)
+    return int(match.group(1)) if match else 0
+
+
 def rkhunter_warning_count(path: Path | None) -> int:
+    """How many things rkhunter flagged. Counts every form it can report them in.
+
+    The console shows `<check> [ Warning ]`; the log-style form is `Warning: ...`; and the closing
+    summary gives "Suspect files" / "Possible rootkits" totals. The largest of these wins, and
+    "One or more warnings" guarantees at least 1, so a scan that flagged something is never "0".
+    """
     if path is None or not path.is_file() or path.stat().st_size == 0:
         return 0
     text = path.read_text(errors="replace")
-    n = len(re.findall(r"^[\t ]*Warning:", text, re.M | re.I))
+    log_style = len(re.findall(r"^[\t ]*Warning:", text, re.M | re.I))
+    console = len(re.findall(r"\[\s*Warning\s*\]", text))
+    summary = _summary_number(text, "Suspect files") + _summary_number(text, "Possible rootkits")
+    n = max(log_style, console, summary)
     if n:
         return n
     if re.search(r"one or more warnings", text, re.I):
@@ -113,14 +127,15 @@ def rootkit_check_status(path: Path | None, rc: int | None = None) -> str:
 def rkhunter_property_change_count(path: Path | None) -> int:
     """Warnings that just mean "a file differs from rkhunter's baseline".
 
-    Right after package updates these are expected (rkhunter's baseline isn't
-    refreshed automatically on Ubuntu), so they're reported separately from
-    other warnings instead of all being presented as possible rootkits.
+    Right after package updates these are expected (rkhunter's baseline isn't refreshed
+    automatically on Ubuntu), so they're reported separately instead of all being presented as
+    possible rootkits. Uses the "Suspect files" total from the summary when present.
     """
     if path is None or not path.is_file():
         return 0
     text = path.read_text(errors="replace")
-    return len(re.findall(r"^[\t ]*Warning: The file properties have changed", text, re.M | re.I))
+    log_style = len(re.findall(r"^[\t ]*Warning: The file properties have changed", text, re.M | re.I))
+    return max(log_style, _summary_number(text, "Suspect files"))
 
 
 def save_result(result: dict) -> Path:

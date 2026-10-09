@@ -22,6 +22,11 @@
 #                                       Turn on ClamAV's background updater (systemctl enable --now
 #                                       clamav-freshclam, via pkexec). It is a standing change to the
 #                                       system, so the app asks first and this only does that one thing.
+#   linux_guardian.sh --refresh-rootkit-baseline
+#                                       Tell rkhunter "the system as it is now is the good baseline"
+#                                       (rkhunter --propupd, via pkexec). Only goes ahead if EVERY warning
+#                                       from the last rootkit scan is a changed file that still matches
+#                                       its Ubuntu package; otherwise it refuses and says why (exit 3).
 #   linux_guardian.sh -h | --help
 set -uo pipefail
 
@@ -37,6 +42,7 @@ usage() { awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"; }
 # gets root is exactly what is written here (tests/test_guardian_privileged.sh checks).
 PRIV_SCRIPT_FRESHCLAM='echo "Running freshclam as root..."; exec freshclam'
 PRIV_SCRIPT_ENABLE_FRESHCLAM='exec systemctl enable --now clamav-freshclam'
+PRIV_SCRIPT_PROPUPD='exec rkhunter --propupd'
 PRIV_SCRIPT_RKHUNTER='exec rkhunter --check --sk --nocolors --no-mail-on-warning'
 
 MODE=""
@@ -57,6 +63,7 @@ while [ $# -gt 0 ]; do
     --last) MODE="last" ;;
     --health) MODE="health" ;;
     --enable-auto-update) MODE="enable_auto_update" ;;
+    --refresh-rootkit-baseline) MODE="refresh_baseline" ;;
     --rootkit) ROOTKIT=1 ;;
     --full) SCAN_STYLE="full" ;;
     --quick) SCAN_STYLE="quick" ;;
@@ -132,6 +139,29 @@ do_enable_auto_update() {
       return 2
       ;;
     *) lg_error "Could not enable the updater (exit ${rc:-1}). See $LG_LOG_DIR/enable-auto-update.log"; return 1 ;;
+  esac
+}
+
+do_refresh_baseline() {
+  lg_require_cmd rkhunter "(install the 'rkhunter' package)" || return 1
+  local analysis arc
+  analysis="$(python3 "$SCRIPT_DIR/rkhunter_baseline.py" --text 2>&1)"; arc=$?
+  printf '%s\n' "$analysis"
+  if [ "$arc" -ne 0 ]; then
+    lg_warn "Not refreshing the rkhunter baseline. Nothing was changed."
+    return 3
+  fi
+  lg_info "Refreshing rkhunter's baseline (the desktop will ask for your password)..."
+  local rcfile rc
+  rcfile="$(mktemp)"
+  mkdir -p "$LG_LOG_DIR"
+  { lg_run_privileged "$PRIV_SCRIPT_PROPUPD"; echo $? > "$rcfile"; } 2>&1 | lg_tee_log "$LG_LOG_DIR/rkhunter-propupd.log"
+  rc="$(cat "$rcfile" 2>/dev/null)"; rm -f "$rcfile"
+  case "${rc:-1}" in
+    0) lg_ok "rkhunter baseline refreshed. Run a scan with the rootkit check to confirm it is clean now."
+       lg_record_incident "rootkit" "info" "rkhunter baseline refreshed after verifying changed files against their packages" ;;
+    126|127) lg_warn "Cancelled: the password prompt was dismissed. Nothing was changed."; return 2 ;;
+    *) lg_error "rkhunter --propupd failed (exit ${rc:-1}). See $LG_LOG_DIR/rkhunter-propupd.log"; return 1 ;;
   esac
 }
 
@@ -323,7 +353,7 @@ do_scan() {
           lg_record_incident "rootkit" "warning" "rkhunter reported warnings, see $rk_report"
           if [ "${rk_changed:-0}" -gt 0 ]; then
             lg_info "${rk_changed} of them are 'file properties have changed': usually just package updates, because rkhunter's baseline is not refreshed automatically here."
-            lg_info "Look at the other warnings first. If you trust this system, you can refresh the baseline yourself: sudo rkhunter --propupd (this app never does it for you)."
+            lg_info "Look at the other warnings first. The baseline can be refreshed, but only after each changed file is checked against its Ubuntu package: linux_guardian.sh --refresh-rootkit-baseline (or Review rootkit baseline in the app)."
           fi
         elif [ "$rk_rc" -ne 0 ]; then
           lg_warn "rkhunter exited with status $rk_rc. See $rk_report"
@@ -358,6 +388,7 @@ case "$MODE" in
   scan) do_scan "$TARGET" ;;
   update) do_update ;;
   enable_auto_update) do_enable_auto_update ;;
+  refresh_baseline) do_refresh_baseline ;;
   health) python3 "$SCRIPT_DIR/scanner_health.py" --text ;;
   last) do_last ;;
 esac

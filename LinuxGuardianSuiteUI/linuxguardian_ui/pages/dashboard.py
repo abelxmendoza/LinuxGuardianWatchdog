@@ -15,7 +15,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui.components import page_header, section_header
-from linuxguardian_ui.dialogs import confirm
+from linuxguardian_ui.dialogs import confirm, review
 
 from linuxguardian_ui.progress import (  # noqa: E402
     Progress,
@@ -440,7 +440,7 @@ class DashboardPage(Gtk.Box):
             self._rootkit_job = False
             if "scan" in label.lower():
                 GLib.timeout_add(400, self._refresh_last_scan)
-            if "scan" in label.lower() or "definitions" in label.lower():
+            if any(word in label.lower() for word in ("scan", "definitions", "baseline")):
                 GLib.timeout_add(400, self._refresh_health)
             if code == 2:
                 self.progress_title.set_label(f"{label} cancelled")
@@ -526,6 +526,33 @@ class DashboardPage(Gtk.Box):
             destructive=False,
         )
 
+    def _on_review_baseline(self, _btn: Gtk.Button) -> None:
+        if self._busy:
+            return
+
+        def done(_code: int, lines: list[str]) -> None:
+            try:
+                result = json.loads("".join(lines))
+            except json.JSONDecodeError:
+                result = {"ok": False, "reason": "Could not analyze the last rootkit scan: " + " ".join(lines)[:200],
+                          "files": [], "safe_to_refresh": False}
+            rows = [(f["explained"], f["path"], f["why"]) for f in result.get("files", [])]
+            safe = bool(result.get("safe_to_refresh"))
+            review(
+                self.get_root(),
+                "Rootkit baseline",
+                result.get("reason", "") + (
+                    "\n\nRefreshing tells rkhunter that the system as it is now is the good one. "
+                    "It needs your password." if safe else ""
+                ),
+                rows,
+                "Refresh baseline" if safe else None,
+                (lambda: self._run("linux_guardian.sh", ["--refresh-rootkit-baseline"], "Rootkit baseline refresh",
+                                   unstoppable=True)) if safe else None,
+            )
+
+        run_sync_async("rkhunter_baseline.py", ["--json"], done, timeout=300.0)
+
     # ---- scanner health ------------------------------------------------
     def _refresh_health(self) -> bool:
         run_sync_async("scanner_health.py", ["--json"], self._on_health, timeout=30.0)
@@ -556,6 +583,11 @@ class DashboardPage(Gtk.Box):
             text.add_css_class(css.get(row["level"], "omega-dim"))
             line.append(text)
             self.health_card.append(line)
+            if row.get("action") == "review_baseline":
+                review_btn = Gtk.Button(label="Review rootkit baseline…", halign=Gtk.Align.START)
+                review_btn.set_tooltip_text("Checks each warned file against its Ubuntu package. Changes nothing by itself.")
+                review_btn.connect("clicked", self._on_review_baseline)
+                self.health_card.append(review_btn)
             if row.get("command"):
                 turn_on = Gtk.Button(label="Turn on automatic updates", halign=Gtk.Align.START)
                 turn_on.set_tooltip_text(f"Runs: {row['command']} (asks for your password)")

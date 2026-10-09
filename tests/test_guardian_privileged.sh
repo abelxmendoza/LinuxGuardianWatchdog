@@ -64,11 +64,28 @@ case "$1" in
   enable) exit 0 ;;
 esac
 STUB
+# dpkg: owns /usr/bin/curl and /usr/bin/awk; --verify reports nothing, or STUB_MODIFIED.
+cat > "$SANDBOX/bin/dpkg" <<'STUB'
+#!/bin/sh
+if [ "$1" = "-S" ]; then
+  shift; shift   # -S --
+  rc=0
+  for p in "$@"; do
+    case "$p" in
+      /usr/bin/curl) echo "curl: $p" ;;
+      /usr/bin/awk) echo "mawk: $p" ;;
+      *) echo "dpkg-query: no path found matching pattern $p" >&2; rc=1 ;;
+    esac
+  done
+  exit $rc
+fi
+[ "$1" = "--verify" ] && { [ -n "${STUB_MODIFIED:-}" ] && echo "??5??????   $STUB_MODIFIED"; exit 0; }
+STUB
 chmod +x "$SANDBOX/bin"/*
 
 guard() { PATH="$SANDBOX/bin:$PATH" bash "$GUARD" "$@" 2>&1; }
 last() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get(sys.argv[2], "<absent>"))' "$LG_HOME/scans/last.json" "$1"; }
-reset() { rm -rf "$LG_HOME" "$CALLS"; unset STUB_PKEXEC STUB_FRESHCLAM STUB_RK_WARN STUB_NO_UNIT; }
+reset() { rm -rf "$LG_HOME" "$CALLS"; unset STUB_PKEXEC STUB_FRESHCLAM STUB_RK_WARN STUB_NO_UNIT STUB_MODIFIED; }
 called() { grep -q -- "$1" "$CALLS" 2>/dev/null; }
 
 # ---------------------------------------------------------------- definitions update
@@ -136,15 +153,47 @@ called '^rkhunter' && bad "rkhunter ran despite cancel" || pass "rkhunter did no
 reset; export STUB_RK_WARN=props
 out="$(guard --scan --rootkit "$SANDBOX/target")"
 [ "$(last rkhunter_warnings)" = "2" ] && [ "$(last rkhunter_property_changes)" = "2" ] && pass "changed-file warnings are counted separately" || bad "warnings=$(last rkhunter_warnings) props=$(last rkhunter_property_changes)"
-echo "$out" | grep -q "sudo rkhunter --propupd" && echo "$out" | grep -qi "never does it for you" && pass "explains the baseline, leaves --propupd to the user" || bad "no propupd explanation: $out"
-called 'propupd' && bad "propupd was executed" || pass "propupd was only mentioned, never run"
+echo "$out" | grep -q -- "--refresh-rootkit-baseline" && echo "$out" | grep -qi "checked against its Ubuntu package" && pass "explains the baseline and points at the gated refresh" || bad "no baseline explanation: $out"
+called 'propupd' && bad "propupd was executed" || pass "a scan never refreshes the baseline by itself"
 
 reset; export STUB_RK_WARN=mixed
 guard --scan --rootkit "$SANDBOX/target" >/dev/null
 [ "$(last rkhunter_warnings)" = "2" ] && [ "$(last rkhunter_property_changes)" = "1" ] && pass "a real warning isn't hidden among changed-file ones" || bad "warnings=$(last rkhunter_warnings) props=$(last rkhunter_property_changes)"
 
+# ------------------------------------------------------ rootkit baseline refresh
+mklast() {  # mklast "path1 path2 ..."  -> a rootkit log with those files flagged, and last.json pointing at it
+  mkdir -p "$LG_HOME/scans"
+  { echo "[ Rootkit Hunter version 1.4.6 ]"; i=0; while [ $i -lt 20 ]; do echo "  Checking something $i      [ OK ]"; i=$((i+1)); done
+    for f in $1; do echo "    $f                       [ Warning ]"; done
+    echo "File properties checks..."; echo "    Suspect files: $(echo $1 | wc -w)"; echo "    Possible rootkits: 0"
+    echo "One or more warnings have been found while checking the system."; } > "$LG_HOME/scans/rk.log"
+  printf '{"rk_report": "%s", "rootkit_check": "ran"}' "$LG_HOME/scans/rk.log" > "$LG_HOME/scans/last.json"
+}
+reset; mklast "/usr/bin/curl /usr/bin/awk"
+out="$(guard --refresh-rootkit-baseline)"; rc=$?
+[ "$rc" -eq 0 ] && called '^pkexec:/bin/sh -c exec rkhunter --propupd sh$' && pass "all changes explained by packages: baseline refreshed via pkexec" || bad "refresh: rc=$rc out=$out calls=$(cat "$CALLS" 2>/dev/null)"
+called '^rkhunter --propupd$' && pass "rkhunter got exactly --propupd" || bad "rkhunter args"
+
+reset; mklast "/usr/bin/curl /usr/local/bin/implant"
+out="$(guard --refresh-rootkit-baseline)"; rc=$?
+[ "$rc" -eq 3 ] && pass "an unexplained file blocks the refresh (exit 3)" || bad "unexplained: rc=$rc"
+called 'pkexec' && bad "asked for a password even though it was unsafe" || pass "no password prompt, nothing run, when blocked"
+echo "$out" | grep -q "implant" && pass "the blocking file is named" || bad "blocking file not shown: $out"
+
+reset; mklast "/usr/bin/curl"; export STUB_MODIFIED="/usr/bin/curl"
+guard --refresh-rootkit-baseline >/dev/null; rc=$?
+[ "$rc" -eq 3 ] && ! called pkexec && pass "a file that differs from its package blocks the refresh" || bad "modified: rc=$rc"
+
+reset; mklast "/usr/bin/curl"; export STUB_PKEXEC=cancel
+guard --refresh-rootkit-baseline >/dev/null; rc=$?
+[ "$rc" -eq 2 ] && ! called '^rkhunter' && pass "dismissed prompt: exit 2, baseline untouched" || bad "cancel: rc=$rc"
+
+reset
+guard --refresh-rootkit-baseline >/dev/null; rc=$?
+[ "$rc" -eq 3 ] && ! called pkexec && pass "no scan on file: refuses" || bad "no scan: rc=$rc"
+
 # -------------------------------------------- what runs as root is fixed text
-for name in PRIV_SCRIPT_FRESHCLAM PRIV_SCRIPT_RKHUNTER PRIV_SCRIPT_ENABLE_FRESHCLAM; do
+for name in PRIV_SCRIPT_FRESHCLAM PRIV_SCRIPT_RKHUNTER PRIV_SCRIPT_ENABLE_FRESHCLAM PRIV_SCRIPT_PROPUPD; do
   line="$(grep "^$name='" "$GUARD")"
   if [ -z "$line" ]; then bad "$name not found as a single-quoted constant"; continue; fi
   body="${line#*=}"
@@ -152,7 +201,7 @@ for name in PRIV_SCRIPT_FRESHCLAM PRIV_SCRIPT_RKHUNTER PRIV_SCRIPT_ENABLE_FRESHC
     *'$'*|*'`'*) bad "$name contains interpolation: $body" ;;
     *) pass "$name is fixed text (no \$ or backticks)" ;;
   esac
-  echo "$body" | grep -qE 'sudo|propupd|--update|rm |curl|wget|disable|mask' && bad "$name does something unexpected: $body" || pass "$name does only its one job"
+  echo "$body" | grep -qE 'sudo|--update|rm |curl|wget|disable|mask' && bad "$name does something unexpected: $body" || pass "$name does only its one job"
 done
 
 # ---------------------------------------------------------------------- health / usage

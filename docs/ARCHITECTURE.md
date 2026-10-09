@@ -82,11 +82,15 @@ one shared helper; `linux_updates.sh` uses it too):
 
 What is deliberately **not** automated:
 
-- `rkhunter --propupd`. It tells rkhunter "the system as it is now is the good baseline".
-  Run automatically it would bless a compromised system. Ubuntu's `APT_AUTOGEN=false` means
-  the baseline goes stale after package updates, so the first real run shows many
-  "file properties have changed" warnings. They are counted separately and explained, and the
-  manual command is printed with its caveat.
+- `rkhunter --propupd` is never run by a scan. It tells rkhunter "the system as it is now is the good
+  baseline", so run blindly it would bless a compromised system. Ubuntu's `APT_AUTOGEN=false` means the
+  baseline goes stale after package updates, so a real run shows many "file properties have changed"
+  warnings. They are counted separately and explained. The only path to a refresh is the previewed one
+  (`--refresh-rootkit-baseline`, or Review rootkit baseline in the app): `rkhunter_baseline.py` checks every
+  warned file against the package that owns it (`dpkg -S` + `dpkg --verify`) and the refresh is offered ONLY
+  if every single warning is explained that way. A file no package owns, one that differs from its package,
+  a non-file warning, or a count that doesn't add up blocks it, and then no password prompt appears at all.
+  The console format of rkhunter was inferred (its detailed log is root-only); the analysis fails closed.
 - `rkhunter --update`: dead on Ubuntu (`WEB_CMD=/bin/false`, `UPDATE_MIRRORS=0`).
 - Enabling `clamav-freshclam` happens only when the user clicks "Turn on automatic updates" and confirms: `PRIV_SCRIPT_ENABLE_FRESHCLAM` is `systemctl enable --now` for that one unit and nothing else.
 
