@@ -1,3 +1,5 @@
+<p align="center"><img src="images/LinuxGuardianLogo.png" alt="LinuxGuardian Watchdog" width="360"></p>
+
 # LinuxGuardian Watchdog
 
 A free, integrated security platform for Linux desktops — a native port of
@@ -6,7 +8,7 @@ rebuilt for the Linux desktop instead of macOS.
 
 Same idea as the original: real security tools (not just a UI) in one place —
 antivirus scanning, rootkit detection, file integrity monitoring, a process
-killer, a cache cleaner, security posture auditing, and automated
+killer, a cache cleaner, one-click software updates, security posture auditing, and automated
 remediation — orchestrated by a native desktop app, with all data kept local
 to the machine. The GUI also carries over the original's dark "Omega
 Black-Ops" theme (purple/red/yellow accents on near-black).
@@ -36,6 +38,7 @@ inspectable, scriptable, and usable from a terminal even without the GUI.
 
 ```
 LinuxGuardianWatchdog/
+├── images/                   # Logo (full) and app icon
 ├── LinuxGuardianSuite/       # Shell + Python scripts that do the actual work
 │   ├── config.sh             # Shared paths, colors, defaults
 │   ├── utils.sh              # Shared logging/helper functions
@@ -44,6 +47,12 @@ LinuxGuardianWatchdog/
 │   ├── linux_security_audit.sh  # Scored security posture checks
 │   ├── linux_process_manager.sh # Process killer: list, SIGTERM/SIGKILL by PID or name
 │   ├── linux_cache_cleanup.sh   # Cache cleaner: browser + system caches, dry-run by default
+│   ├── linux_updates.sh         # Updates: check + install apt/snap updates (password via polkit)
+│   ├── update_inventory.py      # Read-only inventory of pending updates (security/system/third-party/snap)
+│   ├── linux_exposure.sh        # Network exposure: what's listening and who can reach it (detection only)
+│   ├── exposure_inventory.py    # The detector behind it (ss + interfaces + firewall state, no root)
+│   ├── scanner_health.py        # Read-only: definitions age, updater state, rootkit baseline
+│   ├── events.py                # Shared security-event format written to ~/.linuxguardian/incidents/
 │   ├── install_scheduler.sh  # Installs systemd user timers for automation
 │   └── modules.conf.example
 ├── LinuxGuardianSuiteUI/     # Native GTK4 / libadwaita desktop app (Python)
@@ -71,6 +80,18 @@ cd LinuxGuardianSuite
 ./linux_process_manager.sh --kill PID      # ...or --kill-name NAME [--force]
 ./linux_cache_cleanup.sh --scan            # cache cleaner: preview reclaimable space
 ./linux_cache_cleanup.sh --clean --apply   # ...actually clear it
+./linux_updates.sh --check                 # updates: what's pending (no root needed)
+./linux_updates.sh --apply --dry-run       # ...preview an install; changes nothing
+./linux_updates.sh --apply                 # ...install all (password prompt via polkit)
+./linux_updates.sh --apply --security-only # ...or just the security fixes
+./linux_updates.sh --hold ros2             # freeze a stack (ros2 | gazebo | nvidia) so nothing updates it
+./linux_updates.sh --unhold ros2           # ...and let it update again
+./linux_guardian.sh --health               # can you trust a scan right now? (definitions age, rootkit baseline)
+./linux_guardian.sh --update               # update virus definitions (password via polkit)
+./linux_guardian.sh --enable-auto-update   # turn on ClamAV's background updater (asks first, password via polkit)
+./linux_guardian.sh --scan --rootkit       # scan + rkhunter as root (password via polkit; without it the rootkit check is skipped and says so)
+./linux_exposure.sh --check                # what's listening, who can reach it (read-only, no root)
+./linux_exposure.sh --record               # ...and log an event for each NEW exposure
 ```
 
 ## Getting started (GUI)

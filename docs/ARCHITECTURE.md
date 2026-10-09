@@ -37,6 +37,108 @@ first, supports `-h/--help`, and exits non-zero on failure. Scripts that can
 alter the system support `--dry-run` (default) and require an explicit
 `--apply` to make changes.
 
+## Privilege model (Updates)
+
+Installing software needs root, and the machine has no passwordless sudo. The
+Updates feature therefore never handles a password: `linux_updates.sh --apply`
+asks the desktop's own polkit prompt (`pkexec`), and only fixed, hard-coded
+package-manager scripts run as root (`tests/test_updates.sh` asserts these
+contain no variable or command interpolation, so what runs as root is exactly
+what is written in the file).
+
+Deliberate limits:
+
+- `apt-get upgrade`, never `full-upgrade`/`dist-upgrade`/`autoremove`: it can't
+  remove packages. Anything that would need that (a GPU driver version change
+  is the usual case) is shown as "held back" for the user to review.
+- No Stop button during an install. The root side can't be safely interrupted
+  (killing dpkg mid-unpack leaves half-configured packages), and the script
+  keeps draining the installer's output to a log even if the window is closed,
+  so closing the GUI can't SIGPIPE apt/dpkg half-way through.
+- Security-only mode reuses `unattended-upgrade`, the same tool that applies
+  Ubuntu's daily security patches.
+- Release guard: before any install (dry runs included) `update_inventory.py --guard`
+  checks every apt source file (one-line and deb822) and every pending package's
+  Ubuntu origin against the running release, and fails closed if the release can't
+  be determined. It blocks with exit code 3; there is deliberately no override flag.
+- Holds (`--hold`/`--unhold`) are the one root action that takes *data* (package
+  names). They arrive as positional arguments (`"$@"`), never spliced into the script
+  text, are filtered to valid Debian package names in Python and bash, and are
+  validated a third time as root. Group patterns are exact on purpose (a `libcu`
+  prefix would also hold libcurl4/libcups2 and block *their* security fixes).
+  Holds use plain `apt-mark hold`, so apt itself is the source of truth and there's
+  no private state to drift.
+
+## Privilege model (scanner: definitions + rootkit check)
+
+Two more fixed root scripts, run the same way (`lg_run_privileged` in `utils.sh` is the
+one shared helper; `linux_updates.sh` uses it too):
+
+- `PRIV_SCRIPT_FRESHCLAM`: `freshclam`, nothing else. Exit 126/127 from pkexec means the
+  prompt was dismissed: reported as "cancelled", exit code 2, nothing changed.
+- `PRIV_SCRIPT_RKHUNTER`: `rkhunter --check --sk --nocolors --no-mail-on-warning`. Opt-in per scan
+  (`--rootkit`; a checkbox in the app). Without it, no password prompt ever appears and the
+  scan is saved as `rootkit_check: needs_root`.
+
+What is deliberately **not** automated:
+
+- `rkhunter --propupd`. It tells rkhunter "the system as it is now is the good baseline".
+  Run automatically it would bless a compromised system. Ubuntu's `APT_AUTOGEN=false` means
+  the baseline goes stale after package updates, so the first real run shows many
+  "file properties have changed" warnings. They are counted separately and explained, and the
+  manual command is printed with its caveat.
+- `rkhunter --update`: dead on Ubuntu (`WEB_CMD=/bin/false`, `UPDATE_MIRRORS=0`).
+- Enabling `clamav-freshclam` happens only when the user clicks "Turn on automatic updates" and confirms: `PRIV_SCRIPT_ENABLE_FRESHCLAM` is `systemctl enable --now` for that one unit and nothing else.
+
+Honest bookkeeping: every saved scan records `rootkit_check` as `ran | needs_root | cancelled | not_run`.
+"Clean" is only ever shown when it was `ran`. No Stop during the root step (the user can't signal a
+root process); the app says so instead of showing a button that doesn't work.
+
+`scanner_health.py` is read-only: definitions age (from `daily.c[lv]d`, not the months-old `main.cvd`),
+updater service state, rkhunter baseline age and the last check status. Shown on the Dashboard.
+
+## Security score
+
+`linux_security_audit.sh` is the single place the score is computed: a pass is worth 1, a warning
+1/2, a failure 0, and it prints `Rating: N%`. The app only reads that line (`score.py`), so the
+CLI and the window can't disagree. Two checks measure whether a scan result can be trusted at all:
+virus definitions no older than 2 days, and a rootkit check that has actually run.
+
+## Branding
+
+The palette in `style.css` is sampled from the wolf logo: near-black violet ground, neon-violet
+outline (`omega_violet`), amber eyes (`omega_yellow`), ember-orange "WATCHDOG" (`omega_orange`).
+`images/LinuxGuardianLogo.png` is the original; the head-only rounded icon is installed into the
+user's icon theme by `install_desktop_entry.sh` (`Icon=linuxguardian-watchdog`, matched to the window
+by `StartupWMClass`).
+
+## Security events
+
+`events.py` is the one definition of what a security event looks like. Detectors
+write small JSON files into `~/.linuxguardian/incidents/`; the required core is
+the same four fields the shell helper `lg_record_incident` has always written
+(`timestamp`, `category`, `severity`, `message`), plus optional structured fields
+(`event`, `status`, `process`, `pid`, `port`, `protocol`, ...) so a future timeline,
+notification or anomaly detector doesn't have to parse sentences. Severities stay
+`info | warning | critical`: one vocabulary, not two. Old records stay readable.
+
+Detectors that run repeatedly (`linux_exposure.sh --record`) only write an event when
+something is **new or changed**, using a small state file, so a daily timer doesn't
+bury the timeline in repeats.
+
+## Exposure detection (detection only)
+
+`exposure_inventory.py` reads `ss`, `ip` and the firewall's *readable* state, and never
+closes a port, stops a service or changes a rule. It needs no root, and says so where
+that limits it:
+
+- Listeners owned by root or another user are reported as "owner not visible", not guessed.
+- Firewall allow-rules are root-only. What is readable is whether ufw is enabled and its
+  default inbound policy, so coverage is reported as "default-deny, allow-rules can't be
+  checked", and a default-deny firewall lowers a finding by one level but never erases it.
+- Severity is a small pure function (class of service x scope x firewall) that the tests
+  table-check; loopback-only listeners are never findings.
+
 ## GUI stack
 
 - **GTK4** — native Linux widget toolkit (the closest equivalent to AppKit/

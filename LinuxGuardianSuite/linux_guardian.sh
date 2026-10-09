@@ -7,8 +7,21 @@
 #                                       Scan everything except /sys /proc /dev
 #   linux_guardian.sh --scan --changed [PATH]
 #                                       Only files newer than the last saved scan
+#   linux_guardian.sh --scan --rootkit  Also run the rkhunter rootkit check. rkhunter only works as
+#                                       root, so this asks for your password through the desktop's
+#                                       own prompt (pkexec). Without it the rootkit check is skipped
+#                                       and the result says so.
 #   linux_guardian.sh --last            Print the last saved scan result (JSON)
-#   linux_guardian.sh --update          Update virus/rootkit definitions
+#   linux_guardian.sh --health          How much to trust a scan right now: virus-definition age,
+#                                       automatic-update state, rootkit baseline (no root needed)
+#   linux_guardian.sh --update          Update ClamAV virus definitions (freshclam, via pkexec).
+#                                       Never touches rkhunter's baseline: refreshing that tells
+#                                       rkhunter "the system as it is now is the good one", so it's
+#                                       a manual decision (sudo rkhunter --propupd).
+#   linux_guardian.sh --enable-auto-update
+#                                       Turn on ClamAV's background updater (systemctl enable --now
+#                                       clamav-freshclam, via pkexec). It is a standing change to the
+#                                       system, so the app asks first and this only does that one thing.
 #   linux_guardian.sh -h | --help
 set -uo pipefail
 
@@ -18,12 +31,19 @@ source "$SCRIPT_DIR/config.sh"
 # shellcheck source=utils.sh
 source "$SCRIPT_DIR/utils.sh"
 
-usage() { grep '^#' "$0" | sed 's/^# \{0,1\}//;1d'; }
+usage() { awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"; }
+
+# What runs as root. FIXED text: no variables, no data, nothing spliced in, so what
+# gets root is exactly what is written here (tests/test_guardian_privileged.sh checks).
+PRIV_SCRIPT_FRESHCLAM='echo "Running freshclam as root..."; exec freshclam'
+PRIV_SCRIPT_ENABLE_FRESHCLAM='exec systemctl enable --now clamav-freshclam'
+PRIV_SCRIPT_RKHUNTER='exec rkhunter --check --sk --nocolors --no-mail-on-warning'
 
 MODE=""
 TARGET="$HOME"
 SCAN_STYLE="quick"
 CHANGED=0
+ROOTKIT=0
 
 if [ $# -eq 0 ]; then
   usage
@@ -35,6 +55,9 @@ while [ $# -gt 0 ]; do
     --scan) MODE="scan" ;;
     --update) MODE="update" ;;
     --last) MODE="last" ;;
+    --health) MODE="health" ;;
+    --enable-auto-update) MODE="enable_auto_update" ;;
+    --rootkit) ROOTKIT=1 ;;
     --full) SCAN_STYLE="full" ;;
     --quick) SCAN_STYLE="quick" ;;
     --changed) CHANGED=1 ;;
@@ -64,14 +87,52 @@ fi
 
 do_update() {
   lg_require_cmd freshclam "(install the 'clamav' or 'clamav-daemon' package)" || return 1
-  lg_info "Updating ClamAV virus definitions..."
-  sudo freshclam
-  if command -v rkhunter >/dev/null 2>&1; then
-    lg_info "Updating rkhunter data files..."
-    sudo rkhunter --update
-    sudo rkhunter --propupd
+  lg_info "Updating ClamAV virus definitions (the desktop will ask for your password)..."
+  lg_progress "update" "Updating virus definitions" "step=1" "steps=1" "pct=0"
+  mkdir -p "$LG_LOG_DIR"
+  local log rcfile rc
+  log="$LG_LOG_DIR/freshclam-$(date '+%Y%m%d-%H%M%S').log"
+  rcfile="$(mktemp)"
+  # lg_tee_log keeps draining even if the reader goes away, so closing the GUI can't SIGPIPE freshclam mid-download.
+  { lg_run_privileged "$PRIV_SCRIPT_FRESHCLAM"; echo $? > "$rcfile"; } 2>&1 | lg_tee_log "$log"
+  rc="$(cat "$rcfile" 2>/dev/null)"; rm -f "$rcfile"
+  rc="${rc:-1}"
+  lg_progress "update" "Definitions update finished" "step=1" "steps=1" "pct=100"
+  case "$rc" in
+    0) lg_ok "Virus definitions are up to date." ;;
+    126|127)
+      lg_warn "Cancelled: the password prompt was dismissed (or couldn't be shown). Nothing was changed."
+      return 2
+      ;;
+    *)
+      if grep -qi 'locked' "$log" 2>/dev/null; then
+        lg_warn "freshclam is already running (the automatic updater is probably mid-update). Try again in a minute."
+      else
+        lg_error "freshclam failed (exit $rc). See $log"
+      fi
+      return 1
+      ;;
+  esac
+}
+
+do_enable_auto_update() {
+  if ! systemctl cat clamav-freshclam >/dev/null 2>&1; then
+    lg_error "The ClamAV updater service (clamav-freshclam) is not installed. Install it with: sudo apt install clamav-freshclam"
+    return 1
   fi
-  lg_ok "Definitions updated."
+  lg_info "Turning on ClamAV's automatic definition updates (the desktop will ask for your password)..."
+  local rcfile rc
+  rcfile="$(mktemp)"
+  { lg_run_privileged "$PRIV_SCRIPT_ENABLE_FRESHCLAM"; echo $? > "$rcfile"; } 2>&1 | lg_tee_log "$LG_LOG_DIR/enable-auto-update.log"
+  rc="$(cat "$rcfile" 2>/dev/null)"; rm -f "$rcfile"
+  case "${rc:-1}" in
+    0) lg_ok "Automatic updates are on: definitions now refresh in the background, and after every reboot." ;;
+    126|127)
+      lg_warn "Cancelled: the password prompt was dismissed. Nothing was changed."
+      return 2
+      ;;
+    *) lg_error "Could not enable the updater (exit ${rc:-1}). See $LG_LOG_DIR/enable-auto-update.log"; return 1 ;;
+  esac
 }
 
 _lg_unbuf() {
@@ -101,10 +162,11 @@ print(d.get("ended_epoch") or "")' 2>/dev/null
 }
 
 _lg_save_scan() {
-  local clam_report="$1" rk_report="$2" target="$3" engine="$4" clam_rc="$5" rk_rc="$6"
+  local clam_report="$1" rk_report="$2" target="$3" engine="$4" clam_rc="$5" rk_rc="$6" rk_status="${7:-}"
   local extra=(--from-log "$clam_report" --target "$target" --mode "$SCAN_STYLE" --engine "$engine" --clam-rc "$clam_rc" --excludes "$(_lg_exclude_regex)")
   [ -n "$rk_report" ] && extra+=(--rk-log "$rk_report")
   [ -n "$rk_rc" ] && extra+=(--rk-rc "$rk_rc")
+  [ -n "$rk_status" ] && extra+=(--rk-status "$rk_status")
   [ "$CHANGED" -eq 1 ] && extra+=(--changed-only)
   python3 "$SCRIPT_DIR/scan_store.py" save "${extra[@]}" >/dev/null || lg_warn "Could not persist scan result."
 }
@@ -222,43 +284,60 @@ do_scan() {
     lg_progress "clamav" "ClamAV not installed, skipping" "step=1" "steps=2" "pct=100"
   fi
 
+  local rk_status="" rk_rc=""
   if lg_require_cmd rkhunter "(install the 'rkhunter' package)"; then
     lg_info "Step 2 of 2 — rkhunter rootkit scan."
     lg_progress "rkhunter" "Starting rootkit checks" "step=2" "steps=2" "pct=0"
 
-    local rk_cmd=(rkhunter --check --sk --nocolors --no-mail-on-warning)
-    if [ "$(id -u)" -ne 0 ]; then
-      if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-        rk_cmd=(sudo "${rk_cmd[@]}")
+    if [ "$(id -u)" -ne 0 ] && { [ "$ROOTKIT" -ne 1 ] || ! command -v pkexec >/dev/null 2>&1; }; then
+      # rkhunter refuses to run unprivileged. Never ask for a password unless the user opted in.
+      rk_status="needs_root"
+      rk_report=""
+      if [ "$ROOTKIT" -eq 1 ]; then
+        lg_warn "No way to ask for a password here (pkexec is not installed); the rootkit check was skipped."
       else
-        lg_warn "rkhunter is more complete as root. Not prompting for a sudo password (that would look frozen in the GUI)."
-        lg_info "Continuing unprivileged. To run the full check: sudo rkhunter --check --sk"
+        lg_warn "Rootkit check skipped: rkhunter can only run as root. Re-run with --rootkit (or tick the box in the app) to approve it with your password."
       fi
-    fi
-
-    _lg_unbuf "${rk_cmd[@]}" 2>&1 | _lg_unbuf tee "$rk_report" &
-    local rk_pipe_pid=$!
-
-    local rk_rc=0
-    lg_watch_pid "$rk_pipe_pid" "rkhunter" "rkhunter rootkit checks" "$rk_report" "step=2" "steps=2" || rk_rc=$?
-
-    lg_progress "rkhunter" "rkhunter finished" "step=2" "steps=2" "pct=100"
-
-    if grep -qE '^[[:space:]]*Warning:' "$rk_report" 2>/dev/null \
-      || grep -qiE 'one or more warnings' "$rk_report" 2>/dev/null; then
-      lg_warn "rkhunter reported warnings. See $rk_report"
-      lg_record_incident "rootkit" "warning" "rkhunter reported warnings, see $rk_report"
-    elif [ "$rk_rc" -ne 0 ]; then
-      lg_warn "rkhunter exited with status $rk_rc. See $rk_report"
+      lg_warn "This result covers malware only (ClamAV)."
+      lg_progress "rkhunter" "Rootkit check skipped (needs root)" "step=2" "steps=2" "pct=100"
     else
-      lg_ok "rkhunter: no warnings."
+      lg_info "rkhunter needs root: approve the password prompt if one appears. The prompt belongs to your desktop; this app never sees the password."
+      local rk_rcfile
+      rk_rcfile="$(mktemp)"
+      { lg_run_privileged "$PRIV_SCRIPT_RKHUNTER"; echo $? > "$rk_rcfile"; } 2>&1 | lg_tee_log "$rk_report" &
+      local rk_pipe_pid=$!
+      lg_watch_pid "$rk_pipe_pid" "rkhunter" "rkhunter rootkit checks (approve the password prompt if shown)" "$rk_report" "step=2" "steps=2" || true
+      rk_rc="$(cat "$rk_rcfile" 2>/dev/null)"; rm -f "$rk_rcfile"
+      rk_rc="${rk_rc:-1}"
+      lg_progress "rkhunter" "rkhunter finished" "step=2" "steps=2" "pct=100"
+
+      if [ "$rk_rc" = "126" ] || [ "$rk_rc" = "127" ]; then
+        rk_status="cancelled"
+        lg_warn "Rootkit check cancelled: the password prompt was dismissed. Nothing was run."
+      else
+        local rk_total rk_changed
+        rk_total="$(grep -cE '^[[:space:]]*Warning:' "$rk_report" 2>/dev/null || true)"
+        rk_changed="$(grep -ciE '^[[:space:]]*Warning: The file properties have changed' "$rk_report" 2>/dev/null || true)"
+        if [ "${rk_total:-0}" -gt 0 ] || grep -qiE 'one or more warnings' "$rk_report" 2>/dev/null; then
+          lg_warn "rkhunter reported ${rk_total:-some} warning(s). See $rk_report"
+          lg_record_incident "rootkit" "warning" "rkhunter reported warnings, see $rk_report"
+          if [ "${rk_changed:-0}" -gt 0 ]; then
+            lg_info "${rk_changed} of them are 'file properties have changed': usually just package updates, because rkhunter's baseline is not refreshed automatically here."
+            lg_info "Look at the other warnings first. If you trust this system, you can refresh the baseline yourself: sudo rkhunter --propupd (this app never does it for you)."
+          fi
+        elif [ "$rk_rc" -ne 0 ]; then
+          lg_warn "rkhunter exited with status $rk_rc. See $rk_report"
+        else
+          lg_ok "rkhunter: no warnings."
+        fi
+      fi
     fi
   else
     lg_progress "rkhunter" "rkhunter not installed, skipping" "step=2" "steps=2" "pct=100"
   fi
 
   if [ -f "$clam_report" ]; then
-    _lg_save_scan "$clam_report" "$rk_report" "$target" "${engine:-clamscan}" "$clam_rc" "${rk_rc:-}"
+    _lg_save_scan "$clam_report" "$rk_report" "$target" "${engine:-clamscan}" "$clam_rc" "${rk_rc:-}" "${rk_status:-}"
     lg_info "Scan result saved to $LG_SCAN_DIR/last.json"
   fi
   lg_ok "Malware/rootkit scan complete."
@@ -278,5 +357,7 @@ do_last() {
 case "$MODE" in
   scan) do_scan "$TARGET" ;;
   update) do_update ;;
+  enable_auto_update) do_enable_auto_update ;;
+  health) python3 "$SCRIPT_DIR/scanner_health.py" --text ;;
   last) do_last ;;
 esac

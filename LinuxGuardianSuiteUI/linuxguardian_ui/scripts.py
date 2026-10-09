@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import codecs
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -18,6 +19,31 @@ from pathlib import Path
 SUITE_DIR = Path(__file__).resolve().parents[2] / "LinuxGuardianSuite"
 _PROGRESS_PREFIX = "LG_PROGRESS"
 _PROGRESS_UI_INTERVAL = 0.15
+_STEP_KEY_RE = re.compile(r"\|(?:phase|step)=([^|]*)")
+
+
+class ProgressThrottle:
+    """Drops rapid-fire LG_PROGRESS heartbeats, but never a change of step.
+
+    A scan can emit a heartbeat every second, and flooding the GTK main loop
+    with them is wasteful, so quick repeats are dropped. But a *new* step or
+    phase (e.g. "Step 2 of 3: Installing updates") is a state change the user
+    needs to see; dropping it would leave the UI describing the wrong stage
+    for the whole duration of that step.
+    """
+
+    def __init__(self, interval: float = _PROGRESS_UI_INTERVAL) -> None:
+        self.interval = interval
+        self._last_key: tuple[str, ...] | None = None
+        self._last_time = 0.0
+
+    def allow(self, line: str, now: float) -> bool:
+        key = tuple(_STEP_KEY_RE.findall(line))
+        if key != self._last_key or now - self._last_time >= self.interval:
+            self._last_key = key
+            self._last_time = now
+            return True
+        return False
 
 
 def script_path(name: str) -> Path:
@@ -130,17 +156,15 @@ def run_streaming_async(
             )
             with lock:
                 holder["proc"] = proc
-            last_progress = 0.0
+            throttle = ProgressThrottle()
             pending_progress: str | None = None
             for line in _iter_process_lines(proc):
                 if cancel_event.is_set():
                     break
                 if line.startswith(_PROGRESS_PREFIX):
                     pending_progress = line
-                    now = time.monotonic()
-                    if now - last_progress < _PROGRESS_UI_INTERVAL:
+                    if not throttle.allow(line, time.monotonic()):
                         continue
-                    last_progress = now
                     pending_progress = None
                 GLib.idle_add(on_line, line)
             if pending_progress is not None:

@@ -1,6 +1,7 @@
 """Dashboard page: security score, scans, and live output."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import signal
@@ -14,6 +15,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui.components import page_header, section_header
+from linuxguardian_ui.dialogs import confirm
 
 from linuxguardian_ui.progress import (  # noqa: E402
     Progress,
@@ -26,10 +28,15 @@ from linuxguardian_ui.progress import (  # noqa: E402
     remaining_text,
 )
 from linuxguardian_ui.live_scan import find_running_scan, human_bytes, snapshot  # noqa: E402
-from linuxguardian_ui.scan_history import ensure_last_scan, format_last_scan, load_last_scan  # noqa: E402
-from linuxguardian_ui.scripts import run_streaming_async  # noqa: E402
+from linuxguardian_ui.scan_history import (  # noqa: E402
+    ensure_last_scan,
+    format_last_scan,
+    last_scan_severity,
+    load_last_scan,
+)
+from linuxguardian_ui.score import parse_audit_score  # noqa: E402
+from linuxguardian_ui.scripts import run_streaming_async, run_sync_async  # noqa: E402
 
-_SCORE_RE = re.compile(r"Score:\s*(\d+) pass,\s*(\d+) warn,\s*(\d+) fail \(of (\d+) checks\)")
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -41,7 +48,7 @@ class DashboardPage(Gtk.Box):
         self.set_margin_start(24)
         self.set_margin_end(24)
 
-        self.append(page_header("Security dashboard", "Scan, inspect, and maintain your Linux desktop.", "security-high-symbolic"))
+        self.append(page_header("Security dashboard", "Scan, inspect, and maintain your Linux desktop.", "security-high-symbolic", logo=True))
         overview = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, homogeneous=True)
         self.append(overview)
 
@@ -91,6 +98,14 @@ class DashboardPage(Gtk.Box):
         self.last_scan_detail.add_css_class("omega-dim")
         last_card.append(self.last_scan_detail)
 
+        self.append(section_header("Scanner health"))
+        self.health_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.health_card.add_css_class("omega-card")
+        self.health_card.set_margin_start(10)
+        self.health_card.set_margin_end(10)
+        self.health_card.append(Gtk.Label(label="Checking scanner health…", xalign=0))
+        self.append(self.health_card)
+
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         actions.add_css_class("process-toolbar")
         self.append(section_header("Quick actions"))
@@ -109,6 +124,13 @@ class DashboardPage(Gtk.Box):
         self.audit_btn.connect("clicked", self._on_audit_clicked)
         actions.append(self.audit_btn)
 
+        self.update_defs_btn = Gtk.Button(label="Update Definitions")
+        self.update_defs_btn.set_tooltip_text(
+            "Downloads the latest virus definitions (freshclam). Asks for your password through the desktop's own prompt."
+        )
+        self.update_defs_btn.connect("clicked", self._on_update_defs_clicked)
+        actions.append(self.update_defs_btn)
+
         self.stop_btn = Gtk.Button(label="Stop")
         self.stop_btn.add_css_class("destructive-action")
         self.stop_btn.set_sensitive(False)
@@ -124,6 +146,14 @@ class DashboardPage(Gtk.Box):
         self.full_check = Gtk.CheckButton(label="Include developer tools and build caches")
         self.full_check.set_tooltip_text("Adds SDKs, compiler caches, and git objects to the scan — takes longer but is more thorough")
         scan_opts.append(self.full_check)
+
+        self.rootkit_check = Gtk.CheckButton(label="Include rootkit check (asks for your password)")
+        self.rootkit_check.set_tooltip_text(
+            "rkhunter only works as root. Your desktop shows its own password prompt; this app never sees the password. "
+            "Once approved, the rootkit check can't be stopped from here."
+        )
+        self.rootkit_check.set_active(True)
+        scan_opts.append(self.rootkit_check)
 
         self.changed_check = Gtk.CheckButton(label="Scan only files modified since last scan")
         self.changed_check.set_tooltip_text("Skips files that haven't changed — much faster, but relies on a previous scan existing")
@@ -189,8 +219,11 @@ class DashboardPage(Gtk.Box):
         self._attach_tick_id = 0
         self._cancel: Callable[[], None] | None = None
         self._last_progress: Progress | None = None
+        self._unstoppable = False      # a root-owned step is running: the user can't signal it
+        self._rootkit_job = False
         self._attached_scan = find_running_scan()
         self._refresh_last_scan()
+        self._refresh_health()
         if not self._attach_running_scan():
             self._on_audit_clicked(None)
 
@@ -204,9 +237,9 @@ class DashboardPage(Gtk.Box):
     def _set_busy(self, busy: bool, label: str = "") -> None:
         self._busy = busy
         self._job_label = label
-        for btn in (self.scan_btn, self.integrity_btn, self.audit_btn):
+        for btn in (self.scan_btn, self.integrity_btn, self.audit_btn, self.update_defs_btn):
             btn.set_sensitive(not busy)
-        self.stop_btn.set_sensitive(busy)
+        self.stop_btn.set_sensitive(busy and not self._unstoppable)
         if busy:
             self._started_at = time.monotonic()
             self._last_progress = None
@@ -261,6 +294,12 @@ class DashboardPage(Gtk.Box):
             parts.append(phase_label(merged.phase))
         if merged.message:
             parts.append(merged.message)
+        if self._rootkit_job and merged.phase == "rkhunter" and not self._unstoppable:
+            # From here the work is done by a root process that this app can't signal.
+            self._unstoppable = True
+            self.stop_btn.set_sensitive(False)
+        if self._unstoppable:
+            parts.append("runs as root, can't be stopped from here")
         self.progress_subtitle.set_label(" · ".join(parts) if parts else "Running")
         if merged.current:
             counts = ""
@@ -376,7 +415,9 @@ class DashboardPage(Gtk.Box):
         )
         return True
 
-    def _run(self, script: str, args: list[str], label: str) -> None:
+    def _run(self, script: str, args: list[str], label: str, *, unstoppable: bool = False, rootkit: bool = False) -> None:
+        self._unstoppable = unstoppable
+        self._rootkit_job = rootkit
         if self._attach_tick_id:
             GLib.source_remove(self._attach_tick_id)
             self._attach_tick_id = 0
@@ -395,8 +436,17 @@ class DashboardPage(Gtk.Box):
             self._cancel = None
             if label == "Security audit" and code == 0:
                 self._update_score(self._current_lines)
+            self._unstoppable = False
+            self._rootkit_job = False
             if "scan" in label.lower():
                 GLib.timeout_add(400, self._refresh_last_scan)
+            if "scan" in label.lower() or "definitions" in label.lower():
+                GLib.timeout_add(400, self._refresh_health)
+            if code == 2:
+                self.progress_title.set_label(f"{label} cancelled")
+                self.progress_bar.set_text("Cancelled")
+                self.remaining_label.set_label("Password prompt dismissed, nothing was changed")
+                self._set_remaining_color("omega-dim")
             return False
 
         self._cancel = run_streaming_async(script, args, self._append_line, on_done)
@@ -409,29 +459,27 @@ class DashboardPage(Gtk.Box):
         self._cancel()
 
     def _update_score(self, lines: list[str]) -> None:
-        for line in lines:
-            match = _SCORE_RE.search(line)
-            if not match:
-                continue
-            passed, warn, fail, total = (int(x) for x in match.groups())
-            pct = round(100 * passed / total) if total else 0
-            self.score_label.set_label(f"{pct}%")
-            self.score_detail.set_label(f"{passed} pass, {warn} warn, {fail} fail (of {total} checks)")
-            self.score_label.remove_css_class("omega-warning")
-            self.score_label.remove_css_class("omega-critical")
-            self.score_label.remove_css_class("omega-heading")
-            if fail:
-                self.score_label.add_css_class("omega-critical")
-            elif warn:
-                self.score_label.add_css_class("omega-warning")
-            else:
-                self.score_label.add_css_class("omega-heading")
+        score = parse_audit_score(lines)
+        if score is None:
             return
+        self.score_label.set_label(f"{score.percent}%")
+        self.score_detail.set_label(
+            f"{score.passed} pass, {score.warned} warn, {score.failed} fail (of {score.total} checks). "
+            "A warning counts as half."
+        )
+        for css in ("omega-warning", "omega-critical", "omega-heading"):
+            self.score_label.remove_css_class(css)
+        if score.failed:
+            self.score_label.add_css_class("omega-critical")
+        elif score.warned:
+            self.score_label.add_css_class("omega-warning")
+        else:
+            self.score_label.add_css_class("omega-heading")
 
     def _refresh_last_scan(self) -> bool:
         data = load_last_scan() or ensure_last_scan()
-        self.last_scan_title.remove_css_class("omega-critical")
-        self.last_scan_title.remove_css_class("omega-heading")
+        for css in ("omega-critical", "omega-warning", "omega-heading"):
+            self.last_scan_title.remove_css_class(css)
         if not data:
             self.last_scan_title.set_label("No scan saved yet")
             self.last_scan_title.add_css_class("omega-heading")
@@ -443,10 +491,10 @@ class DashboardPage(Gtk.Box):
         title, detail = format_last_scan(data)
         self.last_scan_title.set_label(title)
         self.last_scan_detail.set_label(detail)
-        if int(data.get("infected") or 0) > 0:
-            self.last_scan_title.add_css_class("omega-critical")
-        else:
-            self.last_scan_title.add_css_class("omega-heading")
+        severity = last_scan_severity(data)
+        self.last_scan_title.add_css_class(
+            {"critical": "omega-critical", "warning": "omega-warning"}.get(severity, "omega-heading")
+        )
         self.changed_check.set_sensitive(True)
         return False
 
@@ -455,7 +503,69 @@ class DashboardPage(Gtk.Box):
         args.append("--full" if self.full_check.get_active() else "--quick")
         if self.changed_check.get_active():
             args.append("--changed")
-        self._run("linux_guardian.sh", args, "Malware/rootkit scan")
+        rootkit = self.rootkit_check.get_active()
+        if rootkit:
+            args.append("--rootkit")
+        self._run("linux_guardian.sh", args, "Malware/rootkit scan", rootkit=rootkit)
+
+    def _on_update_defs_clicked(self, _btn: Gtk.Button) -> None:
+        self._run("linux_guardian.sh", ["--update"], "Definitions update", unstoppable=True)
+
+    def _confirm_auto_update(self, _btn: Gtk.Button) -> None:
+        if self._busy:
+            return
+        confirm(
+            self.get_root(),
+            "Turn on automatic virus-definition updates?",
+            "This starts ClamAV's background updater and keeps it on after every reboot, so definitions "
+            "refresh several times a day without you pressing anything.\n\n"
+            "It changes a system service, so your desktop will ask for your password. You can turn it off "
+            "again with: sudo systemctl disable --now clamav-freshclam",
+            "Turn on",
+            lambda: self._run("linux_guardian.sh", ["--enable-auto-update"], "Definitions update", unstoppable=True),
+            destructive=False,
+        )
+
+    # ---- scanner health ------------------------------------------------
+    def _refresh_health(self) -> bool:
+        run_sync_async("scanner_health.py", ["--json"], self._on_health, timeout=30.0)
+        return False
+
+    def _on_health(self, code: int, lines: list[str]) -> bool:
+        child = self.health_card.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            self.health_card.remove(child)
+            child = nxt
+        try:
+            from scanner_health import describe  # same module the CLI uses; found via scripts.SUITE_DIR
+
+            if code != 0:
+                raise RuntimeError(" ".join(lines)[:200] or f"exit {code}")
+            rows = describe(json.loads("".join(lines)))
+        except Exception as exc:  # noqa: BLE001 - never let a status card break the dashboard
+            self.health_card.append(Gtk.Label(label=f"Could not read scanner health: {exc}", xalign=0, wrap=True))
+            return False
+        css = {"ok": "omega-heading", "warning": "omega-warning", "critical": "omega-critical"}
+        for row in rows:
+            line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            name = Gtk.Label(label=row["label"], xalign=0, width_chars=20)
+            name.add_css_class("omega-dim")
+            line.append(name)
+            text = Gtk.Label(label=row["text"], xalign=0, wrap=True, hexpand=True)
+            text.add_css_class(css.get(row["level"], "omega-dim"))
+            line.append(text)
+            self.health_card.append(line)
+            if row.get("command"):
+                turn_on = Gtk.Button(label="Turn on automatic updates", halign=Gtk.Align.START)
+                turn_on.set_tooltip_text(f"Runs: {row['command']} (asks for your password)")
+                turn_on.connect("clicked", self._confirm_auto_update)
+                self.health_card.append(turn_on)
+                hint = Gtk.Label(label=f"Same thing by hand: {row['command']}", xalign=0, selectable=True, wrap=True, margin_start=4)
+                hint.add_css_class("omega-dim")
+                hint.add_css_class("monospace")
+                self.health_card.append(hint)
+        return False
 
     def _on_integrity_clicked(self, _btn: Gtk.Button) -> None:
         self._run("linux_watchdog.sh", ["--check"], "Integrity check")

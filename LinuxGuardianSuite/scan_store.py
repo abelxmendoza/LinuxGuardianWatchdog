@@ -89,6 +89,40 @@ def rkhunter_warning_count(path: Path | None) -> int:
     return 0
 
 
+def rootkit_check_status(path: Path | None, rc: int | None = None) -> str:
+    """Did the rootkit scanner actually scan?
+    'ran' | 'needs_root' | 'cancelled' | 'not_run'.
+
+    `rc` is the exit status if known: pkexec returns 126/127 when the password
+    prompt was dismissed or authentication failed, which leaves no log at all.
+
+    rkhunter refuses to run for a normal user: it prints "You must be the root
+    user to run this program." and exits at once. That leaves a tiny log, zero
+    warnings, and a non-zero exit, which is easy to misread as "no rootkit
+    warnings". Real scan logs are many KB, so a short log with that sentence
+    means the scan never happened.
+    """
+    if path is None or not path.is_file() or path.stat().st_size == 0:
+        return "cancelled" if rc in (126, 127) else "not_run"
+    text = path.read_text(errors="replace")
+    if len(text) < 500 and re.search(r"must be (the )?root", text, re.I):
+        return "needs_root"
+    return "ran"
+
+
+def rkhunter_property_change_count(path: Path | None) -> int:
+    """Warnings that just mean "a file differs from rkhunter's baseline".
+
+    Right after package updates these are expected (rkhunter's baseline isn't
+    refreshed automatically on Ubuntu), so they're reported separately from
+    other warnings instead of all being presented as possible rootkits.
+    """
+    if path is None or not path.is_file():
+        return 0
+    text = path.read_text(errors="replace")
+    return len(re.findall(r"^[\t ]*Warning: The file properties have changed", text, re.M | re.I))
+
+
 def save_result(result: dict) -> Path:
     SCAN_DIR.mkdir(parents=True, exist_ok=True)
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -130,7 +164,9 @@ def import_latest_log(log_dir: Path | None = None, **extra: object) -> dict | No
     rk = directory / f"rkhunter-{stamp}.log"
     if rk.is_file():
         result["rk_report"] = str(rk)
-        result["rkhunter_warnings"] = rkhunter_warning_count(rk)
+        result["rootkit_check"] = rootkit_check_status(rk)
+        if result["rootkit_check"] == "ran":
+            result["rkhunter_warnings"] = rkhunter_warning_count(rk)
     save_result(result)
     return result
 
@@ -156,6 +192,8 @@ def main() -> int:
     save.add_argument("--engine", default="clamscan")
     save.add_argument("--clam-rc", type=int, default=0)
     save.add_argument("--rk-rc", type=int)
+    save.add_argument("--rk-status", choices=("ran", "needs_root", "cancelled", "not_run"),
+                      help="what the shell knows about the rootkit check (wins over guessing from the log)")
     save.add_argument("--excludes", default="")
     sub.add_parser("last", help="Print last.json as JSON")
     sub.add_parser("import-latest", help="Import the newest complete clamscan log")
@@ -188,7 +226,12 @@ def main() -> int:
     )
     if args.rk_log:
         result["rk_report"] = str(args.rk_log)
-        result["rkhunter_warnings"] = rkhunter_warning_count(args.rk_log)
+    if args.rk_log or args.rk_status:
+        result["rootkit_check"] = args.rk_status or rootkit_check_status(args.rk_log, args.rk_rc)
+        # "0 warnings" is only meaningful if the scanner actually ran.
+        if result["rootkit_check"] == "ran":
+            result["rkhunter_warnings"] = rkhunter_warning_count(args.rk_log)
+            result["rkhunter_property_changes"] = rkhunter_property_change_count(args.rk_log)
     if args.rk_rc is not None:
         result["rkhunter_rc"] = args.rk_rc
     if "timestamp" not in result:

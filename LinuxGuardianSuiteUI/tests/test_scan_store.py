@@ -40,7 +40,9 @@ def test_format_last_scan() -> None:
             "ended_epoch": 1,
         }
     )
-    assert title == "Clean"
+    # This record has no rootkit-scan information, so "Clean" would claim a
+    # check that isn't recorded. (Behavior changed on purpose; see test_scan_honesty.py.)
+    assert title == "No malware found"
     assert "717,433 files" in detail
     assert "full scan" in detail
 

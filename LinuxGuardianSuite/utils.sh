@@ -26,14 +26,26 @@ lg_require_cmd() {
 }
 
 # Detects the system's active firewall front-end, if any.
+# Detects the active firewall front-end WITHOUT needing root.
+#
+# `ufw status`, `iptables` and `nft` all refuse to run for a normal user, so
+# asking them makes an *active* firewall look like "none" (the audit used to
+# report "No active firewall" on a machine with ufw enabled for exactly this
+# reason). What a normal user CAN read is ufw's config and the systemd state.
+# Rule-level checks only run when we happen to be root.
 lg_detect_firewall() {
-  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi active; then
+  local ufw_conf="${LG_UFW_CONF:-/etc/ufw/ufw.conf}"
+  if { [ ! -r "$ufw_conf" ] || grep -qi '^ENABLED=yes' "$ufw_conf"; } \
+     && systemctl is-active --quiet ufw 2>/dev/null; then
     echo "ufw"
-  elif command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
+  elif systemctl is-active --quiet firewalld 2>/dev/null; then
     echo "firewalld"
-  elif command -v nft >/dev/null 2>&1 && nft list ruleset 2>/dev/null | grep -q .; then
+  elif systemctl is-active --quiet nftables 2>/dev/null; then
     echo "nftables"
-  elif command -v iptables >/dev/null 2>&1 && iptables -L 2>/dev/null | grep -qv "^Chain.*(policy ACCEPT)$"; then
+  elif [ "$(id -u)" -eq 0 ] && command -v nft >/dev/null 2>&1 && nft list ruleset 2>/dev/null | grep -q .; then
+    echo "nftables"
+  elif [ "$(id -u)" -eq 0 ] && command -v iptables >/dev/null 2>&1 \
+       && iptables -S 2>/dev/null | grep -qE '^-A |^-P (INPUT|FORWARD) (DROP|REJECT)'; then
     echo "iptables"
   else
     echo "none"
@@ -211,4 +223,38 @@ lg_watch_pid() {
     sleep 1
   done
   wait "$pid" 2>/dev/null
+}
+
+# Runs a FIXED script as root: directly if we already are root, otherwise through
+# the desktop's own polkit password prompt (pkexec), so no password is ever
+# handled here. Extra arguments arrive as "$@" inside the script and must be
+# validated there; never splice anything into the script text. Returns 127 when
+# there is no safe way to escalate. Callers treat pkexec's 126 (not authorized)
+# and 127 (prompt dismissed) as "the user cancelled".
+# Usage: lg_run_privileged 'script text' [arg ...]
+lg_run_privileged() {
+  local script="$1"
+  shift
+  if [ "$(id -u)" -eq 0 ]; then
+    /bin/sh -c "$script" sh "$@"
+  elif command -v pkexec >/dev/null 2>&1; then
+    pkexec /bin/sh -c "$script" sh "$@"
+  else
+    return 127
+  fi
+}
+
+# Copies stdin to a log file and, best effort, to stdout. If whatever is reading
+# our stdout (the GUI) goes away mid-run, this keeps draining the root process's
+# output into the log instead of dying. Otherwise apt/dpkg/freshclam would get
+# SIGPIPE writing to a dead pipe and could be killed half-way through, leaving
+# an install or an update half finished. Closing the window must never do that.
+# Usage: some_command 2>&1 | lg_tee_log /path/to/log
+lg_tee_log() {
+  local logfile="$1" line
+  trap '' PIPE
+  while IFS= read -r line || [ -n "$line" ]; do
+    printf '%s\n' "$line" >> "$logfile"
+    printf '%s\n' "$line" 2>/dev/null || true
+  done
 }

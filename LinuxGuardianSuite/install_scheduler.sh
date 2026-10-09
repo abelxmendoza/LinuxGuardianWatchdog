@@ -31,6 +31,7 @@ Description=LinuxGuardian daily security scan
 Type=oneshot
 ExecStart=$SCRIPT_DIR/linux_guardian.sh --scan %h
 ExecStartPost=$SCRIPT_DIR/linux_watchdog.sh --check
+ExecStartPost=-$SCRIPT_DIR/linux_exposure.sh --record
 EOF
 
   cat > "$UNIT_DIR/$TIMER_NAME" <<EOF

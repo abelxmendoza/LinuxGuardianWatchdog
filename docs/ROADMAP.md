@@ -24,6 +24,27 @@ macOS original's feature set:
       macOS original's `theme_omega_black_ops.sh` terminal theme
 - [x] Processes page — the process killer (list, filter, sort, End/Force Kill with confirm dialog)
 - [x] Cache Cleaner page — scan + clear with size preview and confirm dialog
+- [x] Updates page — pending security/system/third-party/snap updates, one-click install via
+      polkit, held-back packages surfaced (never forced), reboot-required notice
+- [x] Security Score now checks automatic updates are *enabled* (not just installed), pending
+      security updates, and restart-needed
+- [x] Updates: release guard — refuses to install if any update source or pending package is for a
+      different Ubuntu release than the one running (no override flag)
+- [x] Updates: pinned stacks — freeze ROS 2 / Gazebo / NVIDIA+CUDA with `apt-mark hold`, honored by
+      this app, Ubuntu's Software Updater and the automatic updater alike
+- [ ] Updates: notify (desktop notification) when security updates have been pending for days
+- [ ] Security Score: warn when the release is nearing end of standard support
+- [x] Exposure page: what's listening, on which interface, who can reach it, firewall state, who is
+      connected now. Detection only; says what it can't see without root instead of guessing
+- [x] Shared security-event format (`events.py`); exposure detection records NEW/CHANGED exposures once
+- [x] Fixed: the audit reported "no firewall" on machines where ufw was active (it asked `ufw status`,
+      which needs root); detection now uses what a normal user can read
+- [ ] Incident timeline page reading `events.read_events()` (the format and reader already exist)
+- [ ] ROS-aware firewall setup (preview-first; allow ROS 2/DDS and Tailscale before default-deny)
+- [ ] Real integration tests for the privileged paths (apt, apt-mark, unattended-upgrade) inside a
+      throwaway Ubuntu container; today they're verified against stubs
+- [ ] Export/import a manifest of installed apps and repos for setting up another machine
+- [ ] Updates: toggle automatic security updates from the app (needs a polkit-guarded write)
 - [ ] Scan history / incident timeline view (incidents are already recorded to
       `~/.linuxguardian/incidents/*.json` by every script — just needs a page)
 - [ ] Settings page (monitored paths, schedule, thresholds)
