@@ -60,7 +60,7 @@ exit $rc
 
 MODE="" FILE="" CLASSIC=0 WANT_APT=1 WANT_SNAP=1
 case "${1:-}" in
-  --export) MODE=export; FILE="${2:-}" ;;
+  --export) MODE="export"; FILE="${2:-}" ;;
   --plan) MODE=plan; FILE="${2:-}" ;;
   --install) MODE=install; FILE="${2:-}"; shift 2 || true
     while [ $# -gt 0 ]; do

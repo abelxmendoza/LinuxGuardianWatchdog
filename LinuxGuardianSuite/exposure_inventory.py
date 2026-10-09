@@ -107,11 +107,34 @@ KNOWN_PORTS: dict[tuple[str, int], tuple[str, str]] = {
 }
 
 
+_DDS_RANGES: list[tuple[int, int]] | None = None
+
+
+def dds_ranges() -> list[tuple[int, int]]:
+    """UDP ranges that mean "ROS 2": domains 0-1 always, plus any domain this user's shell declares
+    (a ROS_DOMAIN_ID=42 laptop talks on 17900-18149, which looks like random high ports otherwise)."""
+    global _DDS_RANGES
+    if _DDS_RANGES is None:
+        ranges = [(7400, 7699)]
+        try:
+            from ros_firewall import dds_range, detect
+
+            info = detect()
+            if info["domain_declared"]:
+                for d in info["domains"]:
+                    lo, hi = (int(x) for x in dds_range(d).split(":"))
+                    ranges.append((lo, hi))
+        except Exception:  # noqa: BLE001 - classification must never fail because ROS detection did
+            pass
+        _DDS_RANGES = ranges
+    return _DDS_RANGES
+
+
 def classify_port(proto: str, port: int) -> tuple[str, str]:
     """(label, class) for a listening port; ('Unknown service', UNKNOWN) if unrecognized."""
     if proto == "tcp" and 5900 <= port <= 5909:
         return "VNC remote desktop", REMOTE_CONTROL
-    if proto == "udp" and 7400 <= port <= 7699:
+    if proto == "udp" and any(lo <= port <= hi for lo, hi in dds_ranges()):
         return "ROS 2 / DDS discovery", ROBOTICS
     return KNOWN_PORTS.get((proto, port), ("Unknown service", UNKNOWN))
 

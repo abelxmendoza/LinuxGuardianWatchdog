@@ -43,7 +43,7 @@ machine() {  # machine VERSION  -> target laptop: nothing installed, htop availa
 JSON
 }
 manifest() {  # manifest [EXTRA_NAME]  -> an app list; EXTRA_NAME is added as both an apt and a snap entry
-  local extra_apt="" extra_snap="" q='"'
+  local extra_apt="" extra_snap=""
   if [ -n "${1:-}" ]; then
     extra_apt=", {\"name\": \"$1\", \"origin\": \"ubuntu\", \"host\": \"archive.ubuntu.com\", \"hardware_specific\": false}"
     extra_snap=", {\"name\": \"$1\", \"channel\": \"x\", \"classic\": false}"

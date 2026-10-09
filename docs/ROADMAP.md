@@ -39,14 +39,24 @@ macOS original's feature set:
 - [x] Shared security-event format (`events.py`); exposure detection records NEW/CHANGED exposures once
 - [x] Fixed: the audit reported "no firewall" on machines where ufw was active (it asked `ufw status`,
       which needs root); detection now uses what a normal user can read
-- [ ] Incident timeline page reading `events.read_events()` (the format and reader already exist)
-- [ ] ROS-aware firewall setup (preview-first; allow ROS 2/DDS and Tailscale before default-deny)
+- [x] Timeline tab: repeated findings folded (270 files became 21 entries on a real machine), filters, mark-as-seen,
+      the audit now records only NEW findings and a Resolved event when one goes away
+- [x] Desktop notifications for new warning/critical findings (grouped, never replays history, on/off switch)
+- [x] ROS-aware firewall helper (Exposure tab): narrow ufw rules for ONE robot address, the ports of YOUR ROS domain,
+      optional PX4/Foxglove/rosbridge presets; preview first, one password prompt, removable
+- [ ] ROS firewall: Tailscale preset, and `ufw allow in proto igmp` as an explained one-click
 - [ ] Real integration tests for the privileged paths (apt, apt-mark, unattended-upgrade) inside a
       throwaway Ubuntu container; today they're verified against stubs
-- [ ] Export/import a manifest of installed apps and repos for setting up another machine
+- [x] Apps tab: export/plan/install an app list for another laptop on the same Ubuntu (no repos or keys added, nothing
+      removed, hardware-specific packages skipped)
+- [ ] Apps: restore dotfiles/config selectively (kept out of the first version on purpose: configs hold secrets)
+- [ ] Apps: add third-party repositories from a list, with the signing key fingerprint shown for you to verify
 - [ ] Updates: toggle automatic security updates from the app (needs a polkit-guarded write)
-- [ ] Scan history / incident timeline view (incidents are already recorded to
-      `~/.linuxguardian/incidents/*.json` by every script — just needs a page)
+- [x] Scanner health card + confirmed actions: Update Definitions, turn on automatic updates, previewed rootkit
+      baseline refresh (every warned file verified against its Ubuntu package), integrity baseline rebuild
+- [x] File integrity watches start-up/persistence locations (shell files, ~/.ssh, autostart, user services, /etc hooks)
+      and no longer trips its own honeypot
+- [ ] Scan history view (past scans, not only the last one)
 - [ ] Settings page (monitored paths, schedule, thresholds)
 - [ ] System tray / background indicator (via `AppIndicator3` or GNOME Shell extension)
 - [ ] Packaging: Flatpak manifest, and/or `.deb`/AUR package

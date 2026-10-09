@@ -16,7 +16,9 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
-from linuxguardian_ui.scripts import run_sync_async  # noqa: E402
+from linuxguardian_ui.components import section_header  # noqa: E402
+from linuxguardian_ui.dialogs import confirm  # noqa: E402
+from linuxguardian_ui.scripts import run_streaming_async, run_sync_async  # noqa: E402
 
 SEV_LABEL = {"critical": "Critical", "warning": "Warning", "info": "Routine"}
 SEV_CSS = {"critical": "omega-critical", "warning": "omega-warning", "info": "omega-dim"}
@@ -64,8 +66,9 @@ class ExposurePage(Gtk.Box):
         self.append(
             _label(
                 "What is listening on this laptop, who can reach it, and whether a firewall stands in the way. "
-                "Detection only: LinuxGuardian never closes a port or changes your firewall, and the advice "
-                "below is for you to act on.",
+                "The scan is detection only: it never closes a port or changes your firewall. The only thing in this "
+                "tab that can change the firewall is Robot networking at the bottom, and only after a preview and "
+                "with your password.",
                 "omega-dim",
             )
         )
@@ -79,6 +82,7 @@ class ExposurePage(Gtk.Box):
         self.content.append(self.status_box)
         self.sections_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.content.append(self.sections_box)
+        self._build_robot_networking()
 
         self.scan()
 
@@ -295,3 +299,126 @@ class ExposurePage(Gtk.Box):
                 lines.extend(f"    {r}" for r in service["reasons"])
                 lines.append(f"    Connected now: {', '.join(service.get('peers') or []) or 'nobody'}")
         return "\n".join(lines) + "\n"
+
+    # -- robot networking (ROS 2) ------------------------------------------------
+    def _build_robot_networking(self) -> None:
+        self._robot_ok = False                    # True once the CURRENT inputs have been previewed
+        self._robot_running = False
+        self.content.append(section_header("Robot networking (ROS 2)"))
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.add_css_class("omega-card")
+        self.content.append(card)
+        self.robot_note = _label("Checking your ROS setup…", "omega-dim")
+        card.append(self.robot_note)
+        card.append(_label(
+            "With a default-deny firewall your robot can't find this laptop's ROS 2. Instead of opening a port range to "
+            "everyone, this adds rules for ONE address, the ports of YOUR ROS domain, and only the extras you tick. "
+            "You see the exact rules first.", "omega-dim"))
+
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        card.append(row)
+        self.peer_entry = Gtk.Entry(placeholder_text="Robot's IP address, e.g. 192.168.1.50", hexpand=True)
+        self.peer_entry.connect("changed", lambda *_: self._robot_changed())
+        row.append(self.peer_entry)
+        row.append(Gtk.Label(label="ROS domain"))
+        self.domain_spin = Gtk.SpinButton.new_with_range(0, 232, 1)
+        self.domain_spin.connect("value-changed", lambda *_: self._robot_changed())
+        row.append(self.domain_spin)
+
+        presets = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        card.append(presets)
+        self._preset_checks: dict[str, Gtk.CheckButton] = {}
+        for name, label in (("mavlink", "PX4 / MAVLink"), ("xrce", "PX4 uXRCE-DDS"), ("foxglove", "Foxglove bridge"), ("rosbridge", "rosbridge")):
+            check = Gtk.CheckButton(label=label)
+            check.connect("toggled", lambda *_: self._robot_changed())
+            presets.append(check)
+            self._preset_checks[name] = check
+
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        card.append(buttons)
+        self.preview_btn = Gtk.Button(label="Preview rules")
+        self.preview_btn.connect("clicked", lambda _b: self._preview_rules())
+        buttons.append(self.preview_btn)
+        self.apply_btn = Gtk.Button(label="Add these rules…")
+        self.apply_btn.add_css_class("suggested-action")
+        self.apply_btn.set_sensitive(False)
+        self.apply_btn.connect("clicked", lambda _b: self._confirm_rules("apply"))
+        buttons.append(self.apply_btn)
+        self.remove_btn = Gtk.Button(label="Remove these rules…")
+        self.remove_btn.set_sensitive(False)
+        self.remove_btn.connect("clicked", lambda _b: self._confirm_rules("remove"))
+        buttons.append(self.remove_btn)
+
+        self.robot_output = Gtk.Label(label="", xalign=0, wrap=True, selectable=True)
+        self.robot_output.add_css_class("monospace")
+        card.append(self.robot_output)
+        run_sync_async("linux_ros_firewall.sh", ["--detect"], self._on_ros_detected, timeout=20.0)
+
+    def _on_ros_detected(self, code: int, lines: list[str]) -> None:
+        text = "\n".join(lines)
+        self.robot_note.set_label(text.splitlines()[0] if text else "No ROS setup found.")
+        for line in lines:
+            if line.startswith("Domains:"):
+                try:
+                    first = int(line.split("[", 1)[1].split("]", 1)[0].split(",")[0])
+                    self.domain_spin.set_value(first)
+                except (IndexError, ValueError):
+                    pass
+
+    def _robot_args(self) -> list[str]:
+        args = ["--peer", self.peer_entry.get_text().strip(), "--domain", str(int(self.domain_spin.get_value()))]
+        for name, check in self._preset_checks.items():
+            if check.get_active():
+                args += ["--preset", name]
+        return args
+
+    def _robot_changed(self) -> None:
+        # Any edit invalidates the preview: you can only apply exactly what you were shown.
+        self._robot_ok = False
+        self.apply_btn.set_sensitive(False)
+        self.remove_btn.set_sensitive(False)
+
+    def _preview_rules(self) -> None:
+        def done(code: int, lines: list[str]) -> None:
+            self.robot_output.set_label("\n".join(lines))
+            self._robot_ok = code == 0
+            self.apply_btn.set_sensitive(self._robot_ok and not self._robot_running)
+            self.remove_btn.set_sensitive(self._robot_ok and not self._robot_running)
+
+        run_sync_async("linux_ros_firewall.sh", ["--plan", *self._robot_args()], done, timeout=20.0)
+
+    def _confirm_rules(self, mode: str) -> None:
+        if not self._robot_ok or self._robot_running:
+            return
+        adding = mode == "apply"
+        confirm(
+            self.get_root(),
+            "Add these firewall rules?" if adding else "Remove these firewall rules?",
+            ("Exactly the rules shown in the preview will be added. The firewall's default policy stays deny and ufw is "
+             "not turned on or off.\n\nYour desktop will ask for your password." if adding else
+             "Exactly the rules shown in the preview will be removed again. Your desktop will ask for your password."),
+            "Add rules" if adding else "Remove rules",
+            lambda: self._run_rules(mode),
+            destructive=not adding,
+        )
+
+    def _run_rules(self, mode: str) -> None:
+        self._robot_running = True
+        self.apply_btn.set_sensitive(False)
+        self.remove_btn.set_sensitive(False)
+        lines: list[str] = []
+
+        def on_line(line: str) -> bool:
+            lines.append(line)
+            self.robot_output.set_label("\n".join(lines[-12:]))
+            return False
+
+        def on_done(code: int) -> bool:
+            self._robot_running = False
+            self._toast_overlay.add_toast(Adw.Toast.new(
+                {0: "Firewall rules updated", 2: "Cancelled: nothing was changed", 3: "Refused: nothing was changed"}.get(code, "ufw reported an error")))
+            self._robot_changed()
+            self.scan()
+            return False
+
+        run_streaming_async("linux_ros_firewall.sh", [f"--{mode}", *self._robot_args()], on_line, on_done)

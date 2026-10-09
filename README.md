@@ -57,6 +57,8 @@ LinuxGuardianWatchdog/
 │   ├── notify_events.py         # Desktop notifications for new warnings
 │   ├── rkhunter_baseline.py     # Checks warned files against their packages before a baseline refresh
 │   ├── app_manifest.py          # Export/plan app lists for moving to another laptop
+│   ├── ros_firewall.py          # ROS 2 domain port math + peer validation for the firewall helper
+│   ├── linux_ros_firewall.sh    # Preview/add/remove narrow ufw rules for a robot
 │   ├── linux_apps.sh            # ...and the installer for them
 │   ├── events.py                # Shared security-event format written to ~/.linuxguardian/incidents/
 │   ├── install_scheduler.sh  # Installs systemd user timers for automation
@@ -99,6 +101,8 @@ cd LinuxGuardianSuite
 ./linux_apps.sh --install apps.json        # ...install the Ubuntu apps and snaps that are available (password via polkit)
 ./linux_watchdog.sh --init                 # file integrity: Documents + start-up locations (ssh, autostart, shell files)
 ./timeline.py --min-severity warning       # the security timeline from the terminal
+./linux_ros_firewall.sh --plan --peer 192.168.1.50 --preset mavlink   # ROS 2 + ufw: preview narrow rules for ONE robot
+./linux_ros_firewall.sh --apply --peer 192.168.1.50                      # ...add them (one password prompt); --remove undoes them
 ./linux_guardian.sh --enable-auto-update   # turn on ClamAV's background updater (asks first, password via polkit)
 ./linux_guardian.sh --scan --rootkit       # scan + rkhunter as root (password via polkit; without it the rootkit check is skipped and says so)
 ./linux_exposure.sh --check                # what's listening, who can reach it (read-only, no root)

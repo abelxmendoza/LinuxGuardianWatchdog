@@ -119,6 +119,17 @@ tested to hold on its own. Import refuses on a different release or CPU, skips h
 or key (third-party apps are listed with the repo they need), never removes (`apt-get install --no-remove`),
 and installs classic (unconfined) snaps only when explicitly included.
 
+## Robot networking (ROS 2 firewall helper)
+
+A default-deny ufw blocks DDS discovery between laptop and robot, and the usual fixes (open a huge range,
+turn the firewall off) are worse than the problem. `ros_firewall.py` computes the narrowest rules instead:
+one peer address (never "any", never wider than /16), the UDP range of the detected `ROS_DOMAIN_ID`
+(`7400 + 250*domain`, 250 ports), and only the presets ticked. `ROS_LOCALHOST_ONLY=1` is recognised: no rules
+needed. `linux_ros_firewall.sh --apply` refuses unless ufw is the active firewall, adds or removes exactly the
+previewed rules in ONE privileged call, validates every group before touching any (one bad rule stops all of
+them), builds the rule comment from an allow-list, and never changes the default policy or enables/disables ufw.
+Allow-rules are root-only to read, so the app can't list what already exists; ufw skips duplicates.
+
 ## Timeline and notifications
 
 `timeline.py` folds identical findings (a count changing doesn't make a finding new) and lets you mark
