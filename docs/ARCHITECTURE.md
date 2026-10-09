@@ -108,6 +108,15 @@ updater service state, rkhunter baseline age and the last check status. Shown on
 CLI and the window can't disagree. Two checks measure whether a scan result can be trusted at all:
 virus definitions no older than 2 days, and a rootkit check that has actually run.
 
+## File integrity
+
+`integrity.py` (called by `linux_watchdog.sh`) watches ~/Documents and the places malware restarts from:
+shell start-up files, ~/.ssh, autostart entries, user systemd units, `/etc/ld.so.preload`, `/etc/passwd`.
+Changes are classified modified / new / missing; a new file in a persistence location is a warning, a new
+document is information. `.git` internals, caches and the honeypot are skipped. The honeypot is only ever
+`stat`ed (hashing it, or scanning it with ClamAV, reads it and used to set off its own alarm), and an access
+is reported once. Events are capped per check so a mass change is one summary, not hundreds of files.
+
 ## Branding
 
 The palette in `style.css` is sampled from the wolf logo: near-black violet ground, neon-violet

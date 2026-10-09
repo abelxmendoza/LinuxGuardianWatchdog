@@ -123,11 +123,24 @@ def rkhunter_status(now: float | None = None) -> dict:
     }
 
 
+INTEGRITY_STALE_DAYS = 30
+
+
+def integrity_status(now: float | None = None) -> dict:
+    try:
+        from integrity import status_dict
+
+        return status_dict(now)
+    except Exception:  # noqa: BLE001 - health reporting must never raise
+        return {"present": False}
+
+
 def collect(now: float | None = None) -> dict:
     return {
         "definitions": definitions_status(now),
         "freshclam": freshclam_service(),
         "rkhunter": rkhunter_status(now),
+        "integrity": integrity_status(now),
     }
 
 
@@ -177,6 +190,23 @@ def describe(health: dict) -> list[dict]:
             row["text"] = f"{base}, last check ran with {r['last_warnings']} warning(s)"
             row["level"] = "warning"
             row["action"] = "review_baseline"      # the UI offers the previewed, gated refresh
+        rows.append(row)
+    i = health.get("integrity")
+    if i is None:
+        return rows                      # a caller that doesn't collect integrity status
+    if not i.get("present"):
+        rows.append({"key": "integrity", "label": "File integrity", "level": "warning",
+                     "text": "No baseline yet: changes to your files can't be detected", "action": "rebuild_integrity"})
+    else:
+        stale = i["age_sec"] > INTEGRITY_STALE_DAYS * DAY
+        old_scope = not i.get("covers_extra_locations")
+        bits = [f"baseline from {fmt_age(i['age_sec'])}", f"{i['files']:,} files"]
+        if old_scope:
+            bits.append("doesn't yet watch start-up locations (~/.ssh, autostart, shell files)")
+        row = {"key": "integrity", "label": "File integrity", "text": ", ".join(bits),
+               "level": "warning" if (stale or old_scope) else "ok"}
+        if stale or old_scope:
+            row["action"] = "rebuild_integrity"
         rows.append(row)
     return rows
 

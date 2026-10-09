@@ -440,7 +440,7 @@ class DashboardPage(Gtk.Box):
             self._rootkit_job = False
             if "scan" in label.lower():
                 GLib.timeout_add(400, self._refresh_last_scan)
-            if any(word in label.lower() for word in ("scan", "definitions", "baseline")):
+            if any(word in label.lower() for word in ("scan", "definitions", "baseline", "integrity")):
                 GLib.timeout_add(400, self._refresh_health)
             if code == 2:
                 self.progress_title.set_label(f"{label} cancelled")
@@ -526,6 +526,21 @@ class DashboardPage(Gtk.Box):
             destructive=False,
         )
 
+    def _confirm_rebuild_integrity(self, _btn: Gtk.Button) -> None:
+        if self._busy:
+            return
+        confirm(
+            self.get_root(),
+            "Rebuild the file-integrity baseline?",
+            "This records your watched files (Documents, shell start-up files, ~/.ssh, autostart entries, "
+            "user services and a few /etc files) exactly as they are right now, and from then on reports "
+            "anything that differs.\n\nOnly do this if you are happy with how they look today. Run "
+            "Check File Integrity first if you want to see what changed. No password needed.",
+            "Rebuild baseline",
+            lambda: self._run("linux_watchdog.sh", ["--init"], "Integrity baseline"),
+            destructive=False,
+        )
+
     def _on_review_baseline(self, _btn: Gtk.Button) -> None:
         if self._busy:
             return
@@ -583,6 +598,11 @@ class DashboardPage(Gtk.Box):
             text.add_css_class(css.get(row["level"], "omega-dim"))
             line.append(text)
             self.health_card.append(line)
+            if row.get("action") == "rebuild_integrity":
+                rebuild = Gtk.Button(label="Rebuild integrity baseline…", halign=Gtk.Align.START)
+                rebuild.set_tooltip_text("Records the current state of your watched files as the good one.")
+                rebuild.connect("clicked", self._confirm_rebuild_integrity)
+                self.health_card.append(rebuild)
             if row.get("action") == "review_baseline":
                 review_btn = Gtk.Button(label="Review rootkit baseline…", halign=Gtk.Align.START)
                 review_btn.set_tooltip_text("Checks each warned file against its Ubuntu package. Changes nothing by itself.")

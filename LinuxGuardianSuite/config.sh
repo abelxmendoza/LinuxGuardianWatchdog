@@ -13,8 +13,9 @@ LG_CONFIG_FILE="$LG_HOME/config"
 
 # Quick scans skip caches, VCS metadata, and bulky SDKs/toolchains. Override
 # in ~/.linuxguardian/config. Full scans only skip /sys /proc /dev.
-LG_CLAM_EXCLUDE_DIRS_QUICK='^/sys|^/proc|^/dev|/\.cache($|/)|/\.local/share/Trash|/snap/|/node_modules/|/\.git($|/)|/\.npm($|/)|/\.rustup($|/)|/\.cargo($|/)|/nvidia/nvidia_sdk|/PX4-Autopilot|/STM32Cube($|/)|/st/stm32cubeide|/\.gz($|/)'
-LG_CLAM_EXCLUDE_DIRS_FULL='^/sys|^/proc|^/dev'
+LG_CLAM_EXCLUDE_DIRS_QUICK='^/sys|^/proc|^/dev|/\.cache($|/)|/\.local/share/Trash|/snap/|/node_modules/|/\.git($|/)|/\.npm($|/)|/\.rustup($|/)|/\.cargo($|/)|/nvidia/nvidia_sdk|/PX4-Autopilot|/STM32Cube($|/)|/st/stm32cubeide|/\.gz($|/)|/Passwords_DO_NOT_OPEN($|/)'
+# The honeypot is a decoy whose only job is to be left alone; our own scans must not read it.
+LG_CLAM_EXCLUDE_DIRS_FULL='^/sys|^/proc|^/dev|/Passwords_DO_NOT_OPEN($|/)'
 
 LG_MONITORED_DIRS_DEFAULT="$HOME/Documents"
 LG_HONEYPOT_DIR="$HOME/Documents/Passwords_DO_NOT_OPEN"

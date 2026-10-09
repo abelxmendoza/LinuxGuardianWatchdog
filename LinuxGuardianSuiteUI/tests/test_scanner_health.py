@@ -199,7 +199,7 @@ def test_the_cli_the_dashboard_calls_really_works(tmp_path, monkeypatch):
         out = subprocess.run([str(script), flag], capture_output=True, text=True, env=env)
         assert out.returncode == 0 and out.stdout.strip(), (flag, out.stderr)
     data = json.loads(subprocess.run([str(script), "--json"], capture_output=True, text=True, env=env).stdout)
-    assert set(data) == {"definitions", "freshclam", "rkhunter"}
+    assert set(data) == {"definitions", "freshclam", "rkhunter", "integrity"}
     assert sh.describe(data)                     # the UI's own consumer accepts it
 
 
@@ -216,3 +216,25 @@ def test_last_warnings_only_count_when_the_check_really_ran(tmp_path, monkeypatc
     assert sh.rkhunter_status(NOW)["last_warnings"] == 0
     write_last(tmp_path / "b", monkeypatch, {"rootkit_check": "ran", "rkhunter_warnings": 9})
     assert sh.rkhunter_status(NOW)["last_warnings"] == 9
+
+
+def _integrity(present=True, age_days=1, files=800, extra=True):
+    return {"present": present, "age_sec": age_days * DAY, "files": files, "covers_extra_locations": extra}
+
+
+def test_integrity_row_levels(clam):
+    base = _health(clam, active=True, last="ran")
+
+    def row(**kw):
+        return [r for r in sh.describe({**base, "integrity": _integrity(**kw)}) if r["key"] == "integrity"][0]
+
+    assert row()["level"] == "ok" and "action" not in row()
+    assert row(age_days=45)["level"] == "warning" and row(age_days=45)["action"] == "rebuild_integrity"
+    old_scope = row(extra=False)
+    assert old_scope["level"] == "warning" and "start-up locations" in old_scope["text"]
+    none = row(present=False)
+    assert none["level"] == "warning" and "No baseline" in none["text"]
+
+
+def test_missing_integrity_info_does_not_break_older_callers(clam):
+    assert sh.describe(_health(clam, active=True))     # no "integrity" key at all
