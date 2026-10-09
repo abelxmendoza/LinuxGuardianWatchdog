@@ -52,6 +52,12 @@ LinuxGuardianWatchdog/
 │   ├── linux_exposure.sh        # Network exposure: what's listening and who can reach it (detection only)
 │   ├── exposure_inventory.py    # The detector behind it (ss + interfaces + firewall state, no root)
 │   ├── scanner_health.py        # Read-only: definitions age, updater state, rootkit baseline
+│   ├── integrity.py             # File integrity engine behind linux_watchdog.sh
+│   ├── timeline.py              # Folds repeated findings into a timeline
+│   ├── notify_events.py         # Desktop notifications for new warnings
+│   ├── rkhunter_baseline.py     # Checks warned files against their packages before a baseline refresh
+│   ├── app_manifest.py          # Export/plan app lists for moving to another laptop
+│   ├── linux_apps.sh            # ...and the installer for them
 │   ├── events.py                # Shared security-event format written to ~/.linuxguardian/incidents/
 │   ├── install_scheduler.sh  # Installs systemd user timers for automation
 │   └── modules.conf.example
@@ -88,6 +94,11 @@ cd LinuxGuardianSuite
 ./linux_updates.sh --unhold ros2           # ...and let it update again
 ./linux_guardian.sh --health               # can you trust a scan right now? (definitions age, rootkit baseline)
 ./linux_guardian.sh --update               # update virus definitions (password via polkit)
+./linux_apps.sh --export apps.json         # list this laptop's apps (no files, passwords or keys)
+./linux_apps.sh --plan apps.json           # on another laptop: preview what installing the list would do
+./linux_apps.sh --install apps.json        # ...install the Ubuntu apps and snaps that are available (password via polkit)
+./linux_watchdog.sh --init                 # file integrity: Documents + start-up locations (ssh, autostart, shell files)
+./timeline.py --min-severity warning       # the security timeline from the terminal
 ./linux_guardian.sh --enable-auto-update   # turn on ClamAV's background updater (asks first, password via polkit)
 ./linux_guardian.sh --scan --rootkit       # scan + rkhunter as root (password via polkit; without it the rootkit check is skipped and says so)
 ./linux_exposure.sh --check                # what's listening, who can reach it (read-only, no root)

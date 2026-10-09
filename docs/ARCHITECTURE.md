@@ -108,6 +108,24 @@ updater service state, rkhunter baseline age and the last check status. Shown on
 CLI and the window can't disagree. Two checks measure whether a scan result can be trusted at all:
 virus definitions no older than 2 days, and a rootkit check that has actually run.
 
+## Moving apps between laptops
+
+`app_manifest.py` writes a plain list (apt manual installs with their origin, snaps, flatpaks, the third-party
+repositories they came from with credentials stripped, holds). It contains nothing from `$HOME`.
+`--plan` recomputes everything on the target; the file is never trusted: names are matched against strict
+patterns at three independent layers (planner, `linux_apps.sh`, the root script itself) and each layer is
+tested to hold on its own. Import refuses on a different release or CPU, skips hardware-specific packages
+(kernel, NVIDIA/CUDA/Jetson, firmware) by name rule even if the file claims otherwise, never adds a repository
+or key (third-party apps are listed with the repo they need), never removes (`apt-get install --no-remove`),
+and installs classic (unconfined) snaps only when explicitly included.
+
+## Timeline and notifications
+
+`timeline.py` folds identical findings (a count changing doesn't make a finding new) and lets you mark
+one as seen; nothing is deleted. The audit only records a finding when it is NEW and records a "Resolved"
+event when it goes away (`audit_events.py`). `notify_events.py` announces events newer than its last run,
+grouped into one notification, and never replays history on first use.
+
 ## File integrity
 
 `integrity.py` (called by `linux_watchdog.sh`) watches ~/Documents and the places malware restarts from:

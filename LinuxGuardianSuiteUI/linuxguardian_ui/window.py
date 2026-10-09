@@ -9,6 +9,7 @@ from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 from linuxguardian_ui.components import LOGO_FULL, brand_lockup  # noqa: E402
 
+from linuxguardian_ui.pages.apps import AppsPage  # noqa: E402
 from linuxguardian_ui.pages.cache_cleaner import CacheCleanerPage  # noqa: E402
 from linuxguardian_ui.pages.dashboard import DashboardPage  # noqa: E402
 from linuxguardian_ui.pages.exposure import ExposurePage  # noqa: E402
@@ -72,6 +73,9 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
             ExposurePage(self.toast_overlay), "exposure", "Exposure"
         )
         exposure_page.set_icon_name("network-wired-symbolic")
+
+        apps_page = stack.add_titled(AppsPage(self.toast_overlay), "apps", "Apps")
+        apps_page.set_icon_name("folder-download-symbolic")
 
         timeline_page = stack.add_titled(TimelinePage(self.toast_overlay), "timeline", "Timeline")
         timeline_page.set_icon_name("document-open-recent-symbolic")
