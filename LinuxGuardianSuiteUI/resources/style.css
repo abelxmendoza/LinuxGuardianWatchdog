@@ -300,3 +300,10 @@ button.danger-outline:hover { background-color: alpha(@omega_red, 0.12); border-
 scrollbar slider { background-color: alpha(@omega_violet, 0.5); border-radius: 6px; }
 scrollbar slider:hover { background-color: @omega_violet; }
 check:checked, radio:checked { background-color: @omega_violet; border-color: @omega_violet; color: #ffffff; }
+
+/* ── Updates: plain-language groups with the real package names kept underneath ─────────────── */
+.update-group { padding: 4px 0; }
+.update-group-title { color: @omega_purple; font-weight: 800; font-size: 15px; }
+.update-chip { background-color: alpha(@omega_violet, 0.22); color: @omega_text; border-radius: 10px; padding: 1px 9px; font-size: 11px; font-weight: 700; }
+.update-name { font-weight: 700; font-size: 14px; }
+.update-raw { font-family: monospace; font-size: 11px; color: @omega_text_dim; }

@@ -19,6 +19,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
+from linuxguardian_ui import update_catalog as uc  # noqa: E402
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.progress import is_progress_noise, parse_progress_line  # noqa: E402
@@ -78,6 +79,56 @@ def _fmt_age(seconds: int | None) -> str:
     if seconds < 172800:
         return f"{seconds // 3600}h ago"
     return f"{seconds // 86400}d ago"
+
+
+def _detail_text(pkg: dict) -> str:
+    """The real package name and versions: the technical line kept under every friendly name."""
+    if pkg.get("manager") == "snap":
+        bits = [pkg["name"], pkg.get("candidate") or ""]
+        bits += [b for b in (pkg.get("size"), pkg.get("origin")) if b]
+        return "  ·  ".join(b for b in bits if b)
+    old, new = pkg.get("installed"), pkg.get("candidate")
+    if old and new:
+        return f"{pkg['name']}   {old}  →  {new}"
+    return f"{pkg['name']}   {new or old or ''}".rstrip()
+
+
+def _pkg_row(pkg: dict, done: bool = False) -> Gtk.Widget:
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1, margin_top=6, margin_bottom=6, margin_start=10, margin_end=10)
+    top = Gtk.Label(label=("✓  " if done else "") + uc.friendly_name(pkg["name"]), xalign=0, wrap=True)
+    top.add_css_class("update-name")
+    box.append(top)
+    detail = Gtk.Label(label=_detail_text(pkg), xalign=0, ellipsize=Pango.EllipsizeMode.END, selectable=True)
+    detail.add_css_class("update-raw")
+    box.append(detail)
+    return box
+
+
+def _group_expander(group: uc.Group, items: list[dict], expanded: bool, done: bool = False) -> Gtk.Widget:
+    """One heading per kind of software ("Web browsers & mail · Firefox, Chromium"), real packages inside."""
+    head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    title = Gtk.Label(label=group.title, xalign=0)
+    title.add_css_class("update-group-title")
+    head.append(title)
+    count = Gtk.Label(label=uc.plural(len(items), "package" if group.id not in ("apps", "browsers") else "item"), xalign=0)
+    count.add_css_class("update-chip")
+    head.append(count)
+    summary = Gtk.Label(label=uc.headline(items), xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.END)
+    summary.add_css_class("omega-dim")
+    head.append(summary)
+    expander = Gtk.Expander()
+    expander.set_label_widget(head)
+    expander.set_expanded(expanded)
+    inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=4, margin_start=22)
+    inner.append(_label(group.blurb, "omega-dim"))
+    listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+    listbox.add_css_class("omega-card")
+    for pkg in items:
+        listbox.append(_pkg_row(pkg, done))
+    inner.append(listbox)
+    expander.set_child(inner)
+    expander.add_css_class("update-group")
+    return expander
 
 
 class UpdatesPage(Gtk.Box):
@@ -181,15 +232,26 @@ class UpdatesPage(Gtk.Box):
         self.run_bar.set_pulse_step(0.08)
         self.run_card.append(self.run_bar)
 
-        note = _label(
+        self.run_recent = _label("", "omega-dim")
+        self.run_card.append(self.run_recent)
+
+        self.run_note = note = _label(
             "This can't be safely interrupted once it starts. Closing this window won't stop it; "
             "the work finishes in the background and is logged to ~/.linuxguardian/logs/updates/.",
             "omega-dim",
         )
         self.run_card.append(note)
 
+        # What was updated, in plain language (filled in when a run finishes).
+        self.summary_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.summary_box.set_visible(False)
+        self.run_card.append(self.summary_box)
+
+        # The raw installer output is still here for anyone who wants it, but it no longer IS the interface.
+        tech = Gtk.Expander(label="Technical details (raw installer output)")
+        self.run_card.append(tech)
         scroller = Gtk.ScrolledWindow(min_content_height=200)
-        self.run_card.append(scroller)
+        tech.set_child(scroller)
         self.output_view = Gtk.TextView(editable=False, monospace=True)
         self.output_view.set_wrap_mode(Gtk.WrapMode.CHAR)
         scroller.set_child(self.output_view)
@@ -357,37 +419,9 @@ class UpdatesPage(Gtk.Box):
         expander.set_child(inner)
         inner.append(_label(blurb, "omega-dim"))
 
-        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        listbox.add_css_class("omega-card")
-        for pkg in sorted(items, key=lambda p: p["name"]):
-            listbox.append(self._build_row(pkg))
-        inner.append(listbox)
+        for group, rows in uc.group_items(items):
+            inner.append(_group_expander(group, rows, expanded=len(rows) <= 4 and expanded))
         return expander
-
-    def _build_row(self, pkg: dict) -> Gtk.Widget:
-        row = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL,
-            spacing=12,
-            margin_top=6,
-            margin_bottom=6,
-            margin_start=10,
-            margin_end=10,
-        )
-        name = Gtk.Label(label=pkg["name"], xalign=0, hexpand=True)
-        row.append(name)
-
-        if pkg["manager"] == "snap":
-            detail = f"{pkg['candidate']}  ·  {pkg.get('size', '')}  ·  {pkg.get('origin', '')}"
-            if pkg.get("notes") and pkg["notes"] != "-":
-                detail += f"  ·  {pkg['notes']}"
-        elif pkg.get("installed"):
-            detail = f"{pkg['installed']}  →  {pkg['candidate']}"
-        else:
-            detail = pkg["candidate"]
-        version = Gtk.Label(label=detail, xalign=1, ellipsize=Pango.EllipsizeMode.END, max_width_chars=60)
-        version.add_css_class("omega-dim")
-        row.append(version)
-        return row
 
     def _build_held_back(self, names: list[str]) -> Gtk.Widget:
         n = len(names)
@@ -637,11 +671,24 @@ class UpdatesPage(Gtk.Box):
             ok_title="Updates installed",
             ok_toast="Updates installed",
             waiting="Waiting for your password…",
+            summarize=True,
+            scope="security" if security_only else "all",
         )
 
-    def _start_job(self, args: list[str], running_title: str, ok_title: str, ok_toast: str, waiting: str) -> None:
+    def _start_job(self, args: list[str], running_title: str, ok_title: str, ok_toast: str, waiting: str,
+                   summarize: bool = False, scope: str = "all") -> None:
         """Run a linux_updates.sh action (install or hold) behind the progress card."""
-        self._job = {"ok_title": ok_title, "ok_toast": ok_toast}
+        self._job = {"ok_title": ok_title, "ok_toast": ok_toast, "summarize": summarize}
+        # What we expect to install, from the check made before starting: used for progress, and as the
+        # fallback list when the installer doesn't report packages one by one (unattended-upgrade).
+        self._snapshot = [p for p in self._pkgs if scope == "all" or p["category"] == "security"]
+        self._pending_map = {p["name"]: (p.get("installed") or "", p.get("candidate") or "") for p in self._snapshot}
+        self._ilog = uc.InstallLog()
+        self._determinate = False
+        self.summary_box.set_visible(False)
+        self._clear(self.summary_box)
+        self.run_recent.set_label("")
+        self.run_note.set_visible(True)
         self._busy = True
         self._update_buttons()
         self.run_card.set_visible(True)
@@ -663,7 +710,8 @@ class UpdatesPage(Gtk.Box):
         if not self._busy:
             self._pulse_id = 0
             return False
-        self.run_bar.pulse()
+        if not self._determinate:
+            self.run_bar.pulse()
         return True
 
     def _on_line(self, line: str) -> bool:
@@ -678,6 +726,9 @@ class UpdatesPage(Gtk.Box):
                 self.run_subtitle.set_label(text)
                 self.run_bar.set_text(progress.message)
             return False
+        kind = self._ilog.feed(line)
+        if kind in ("working", "done", "snap"):
+            self._show_activity()
         if _DPKG_NOISE_RE.match(line) or is_progress_noise(line):
             return False
         self.buffer.insert(self.buffer.get_end_iter(), line + "\n")
@@ -685,14 +736,72 @@ class UpdatesPage(Gtk.Box):
         self.output_view.scroll_to_mark(self._end_mark, 0.0, False, 0.0, 0.0)
         return False
 
+    def _show_activity(self) -> None:
+        """Say what is being updated in words ('Updating Firefox, 12 of 48'), not package names."""
+        log = self._ilog
+        total = log.expected or len(self._snapshot)
+        n = len(log.done)
+        self.run_subtitle.set_label(f"Updating {log.current}" + (f"  ({min(n, total)} of {total})" if total else ""))
+        frac = log.fraction(len(self._snapshot))
+        if frac is not None:
+            self._determinate = True
+            self.run_bar.set_fraction(frac)
+            self.run_bar.set_text(f"{min(n, total)} of {total}")
+        recent = [uc.friendly_name(d.name) for d in list(log.done.values())[-5:]]
+        if recent:
+            self.run_recent.set_label("Finished: " + ", ".join(reversed(recent)))
+
+    def _show_summary(self, items: list[dict]) -> None:
+        """'What was updated': grouped, in plain language, with the real package names kept underneath."""
+        self._clear(self.summary_box)
+        groups = uc.group_items(items)
+        heading = Gtk.Label(label="What was updated", xalign=0)
+        heading.add_css_class("omega-heading")
+        heading.add_css_class("title-4")
+        self.summary_box.append(heading)
+        self.summary_box.append(_label(
+            f"{uc.plural(len(items), 'package')} updated across {uc.plural(len(groups), 'group')}. "
+            "Open a group to see the exact packages and versions.", "omega-dim"))
+        if any(g.id == "kernel" for g, _ in groups):
+            self.summary_box.append(_label("A new Linux kernel was installed. Restart your laptop to start using it.", "omega-warning"))
+        for i, (group, rows) in enumerate(groups):
+            self.summary_box.append(_group_expander(group, rows, expanded=i < 2, done=True))
+        copy_btn = Gtk.Button(label="Copy summary", halign=Gtk.Align.START)
+        copy_btn.connect("clicked", lambda _b: self._copy_summary(items))
+        self.summary_box.append(copy_btn)
+        self.summary_box.set_visible(True)
+
+    def _copy_summary(self, items: list[dict]) -> None:
+        lines = ["LinuxGuardian Watchdog — software updated", ""]
+        for group, rows in uc.group_items(items):
+            lines.append(f"## {group.title} ({len(rows)})")
+            lines += [f"- {uc.friendly_name(p['name'])}   [{_detail_text(p).replace('  ·  ', ', ')}]" for p in rows]
+            lines.append("")
+        try:
+            copy_text("\n".join(lines))
+            self._toast_overlay.add_toast(Adw.Toast(title="Summary copied", timeout=2))
+        except Exception as exc:  # noqa: BLE001
+            self._toast_overlay.add_toast(Adw.Toast(title=f"Copy failed: {exc}", timeout=3))
+
     def _on_job_done(self, code: int) -> bool:
         self._busy = False
         self.run_spinner.stop()
+        self.run_note.set_visible(False)         # "can't be interrupted" no longer applies
         if code == 0:
             self.run_title.set_label(self._job.get("ok_title", "Done"))
             self.run_subtitle.set_label("Done. Re-checking…")
             self.run_bar.set_fraction(1.0)
             self.run_bar.set_text("Done")
+            if self._job.get("summarize"):
+                self._ilog.complete_from_plan(self._pending_map)
+                items = self._ilog.items()
+                if not items:                                   # the installer reported nothing per package
+                    items = [dict(p) for p in self._snapshot]
+                if items:
+                    self._show_summary(items)
+                    self.run_subtitle.set_label(
+                        f"Updated {uc.plural(len(items), 'package')}. The list below shows what, in plain language.")
+                    self.run_recent.set_label("")
             toast = self._job.get("ok_toast", "Done")
         elif code == 2:
             self.run_title.set_label("Cancelled")
