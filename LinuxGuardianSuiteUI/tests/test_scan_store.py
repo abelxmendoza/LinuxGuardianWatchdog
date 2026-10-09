@@ -40,9 +40,9 @@ def test_format_last_scan() -> None:
             "ended_epoch": 1,
         }
     )
-    # This record has no rootkit-scan information, so "Clean" would claim a
-    # check that isn't recorded. (Behavior changed on purpose; see test_scan_honesty.py.)
-    assert title == "No malware found"
+    # Unreadable files mean coverage was incomplete, whatever else is true.
+    assert title == "Scan needs review"
+    assert "79 unreadable" in detail and "ClamAV coverage incomplete" in detail
     assert "717,433 files" in detail
     assert "full scan" in detail
 
@@ -56,3 +56,17 @@ if __name__ == "__main__":
     test_parse_clam_log()
     test_format_last_scan()
     print("OK")
+
+
+def test_rootkit_failure_not_clean():
+    title, detail = format_last_scan({"files": 761, "infected": 0, "errors": 0,
+                                     "clam_rc": 0, "rkhunter_rc": 1})
+    assert title == "Scan needs review"
+    assert "Rootkit check needs review" in detail
+
+
+def test_completed_scan_no_detections():
+    title, _ = format_last_scan({"files": 10, "infected": 0, "errors": 0,
+                                "clam_rc": 0, "rkhunter_rc": 0})
+    # No record of a rootkit scan: only what is true is claimed.
+    assert title == "No malware found"

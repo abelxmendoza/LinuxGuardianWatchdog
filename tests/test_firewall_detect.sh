@@ -33,8 +33,10 @@ chmod +x "$SANDBOX/bin"/*
 printf 'ENABLED=yes\nLOGLEVEL=low\n' > "$SANDBOX/ufw-on.conf"
 printf 'ENABLED=no\nLOGLEVEL=low\n'  > "$SANDBOX/ufw-off.conf"
 
-detect() {  # detect CONF_PATH   (STUB_ACTIVE from the environment)
-  PATH="$SANDBOX/bin:$PATH" LG_UFW_CONF="$1" bash -c \
+# PATH for "this machine has no raw nft/iptables": stubs + /usr/bin:/bin only (those live in /usr/sbin).
+CLEAN_PATH="$SANDBOX/bin:/usr/bin:/bin"
+detect() {  # detect CONF_PATH   (STUB_ACTIVE from the environment; DETECT_PATH optional)
+  PATH="${DETECT_PATH:-$CLEAN_PATH}" LG_UFW_CONF="$1" bash -c \
     "source '$ROOT/LinuxGuardianSuite/config.sh'; source '$ROOT/LinuxGuardianSuite/utils.sh'; lg_detect_firewall" 2>/dev/null
 }
 
@@ -58,6 +60,14 @@ r="$(STUB_ACTIVE="nftables" detect "$SANDBOX/ufw-off.conf")"
 
 r="$(STUB_ACTIVE="" detect "$SANDBOX/ufw-off.conf")"
 [ "$r" = "none" ] && pass "nothing running -> none" || bad "none: got '$r'"
+
+# Raw rules (nft/iptables) are root-only to read and their presence proves nothing: say "unknown", not "none".
+printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/bin/nft"; chmod +x "$SANDBOX/bin/nft"
+r="$(STUB_ACTIVE="" detect "$SANDBOX/ufw-off.conf")"
+[ "$r" = "unknown" ] && pass "nothing running but raw nft present (unreadable without root) -> unknown, not none" || bad "unknown: got '$r'"
+r="$(STUB_ACTIVE="ufw" detect "$SANDBOX/ufw-on.conf")"
+[ "$r" = "ufw" ] && pass "a verified ufw still wins over unreadable raw rules" || bad "ufw vs raw: got '$r'"
+rm -f "$SANDBOX/bin/nft"
 
 # ufw wins when more than one is up.
 r="$(STUB_ACTIVE="ufw firewalld" detect "$SANDBOX/ufw-on.conf")"

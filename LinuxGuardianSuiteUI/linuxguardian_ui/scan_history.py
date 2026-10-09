@@ -58,6 +58,29 @@ def rootkit_status(data: dict) -> str:
     return rootkit_check_status(Path(report)) if report else "not_run"
 
 
+def coverage_incomplete(data: dict) -> bool:
+    """ClamAV could not read everything it was pointed at, or died part-way.
+
+    Unreadable files count; so does an exit status that isn't clean/infected. Status 2 on its own
+    (with a finished summary and zero counted errors) is the usual "a temp file vanished mid-scan",
+    and is deliberately not alarming.
+    """
+    return int(data.get("errors") or 0) > 0 or data.get("clam_rc") not in (None, 0, 1, 2)
+
+
+def rootkit_errored(data: dict) -> bool:
+    """rkhunter produced no usable verdict: it exited non-zero without reporting any warnings.
+
+    Status "not_run" is included for records saved before `rootkit_check` existed that carry only an
+    exit status. "needs_root" never counts: that is a known skip, not an error.
+    """
+    return (
+        rootkit_status(data) in ("ran", "not_run")
+        and not int(data.get("rkhunter_warnings") or 0)
+        and data.get("rkhunter_rc") not in (None, 0)
+    )
+
+
 def last_scan_severity(data: dict) -> str:
     """'critical' | 'warning' | 'ok' for coloring the card. A scan whose rootkit
     half never ran is a warning, not a pass."""
@@ -67,6 +90,8 @@ def last_scan_severity(data: dict) -> str:
         return "warning"
     status = rootkit_status(data)
     if status != "ran" or int(data.get("rkhunter_warnings") or 0) > 0:
+        return "warning"
+    if coverage_incomplete(data) or rootkit_errored(data):
         return "warning"
     return "ok"
 
@@ -87,6 +112,8 @@ def format_last_scan(data: dict) -> tuple[str, str]:
     when = _when(data)
     status = rootkit_status(data)
     rk_warnings = int(data.get("rkhunter_warnings") or 0) if status == "ran" else 0
+    incomplete = coverage_incomplete(data)
+    rk_error = rootkit_errored(data)
 
     if infected:
         title = f"{infected} infected"
@@ -94,6 +121,8 @@ def format_last_scan(data: dict) -> tuple[str, str]:
         title = "Scan incomplete"
     elif rk_warnings:
         title = f"{rk_warnings} rootkit warning{'s' if rk_warnings != 1 else ''}"
+    elif incomplete or rk_error:
+        title = "Scan needs review"
     elif status == "ran":
         title = "Clean"
     else:
@@ -110,11 +139,13 @@ def format_last_scan(data: dict) -> tuple[str, str]:
     if changed:
         kind = "changed-files " + kind
     bits.append(kind)
+    if incomplete:
+        bits.append("ClamAV coverage incomplete or unverified")
     if status == "needs_root":
         bits.append("rootkit check skipped (needs root)")
     elif status == "cancelled":
         bits.append("rootkit check cancelled (password prompt dismissed)")
-    elif status == "not_run":
+    elif status == "not_run" and not rk_error:
         bits.append("rootkit check not run")
     elif rk_warnings:
         changed_files = min(int(data.get("rkhunter_property_changes") or 0), rk_warnings)
@@ -122,6 +153,10 @@ def format_last_scan(data: dict) -> tuple[str, str]:
             bits.append("all are changed files, normal right after updates")
         elif changed_files:
             bits.append(f"{changed_files} are changed files, normal right after updates")
+        else:
+            bits.append("Rootkit check needs review; see its report")
+    if rk_error:
+        bits.append("Rootkit check needs review; see its report")
     return title, " · ".join(bits)
 
 

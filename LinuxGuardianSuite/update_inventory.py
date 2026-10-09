@@ -226,17 +226,27 @@ def reboot_status() -> dict:
 def auto_security_status() -> dict:
     """Are automatic security updates *actually on*, not merely installed?
 
-    Needs all three: the unattended-upgrade tool present, the APT periodic
-    setting non-zero, and the daily systemd timer enabled.
+    Needs all of: the unattended-upgrade tool present, APT's periodic machinery not disabled
+    (Enable "0" turns every periodic job off), package lists refreshed periodically (otherwise
+    there is nothing new to upgrade), the periodic upgrade setting non-zero, and the daily systemd
+    timer both enabled and running. Even then this proves configuration, not that an update
+    recently succeeded; the unattended-upgrades logs show that.
     """
     installed = shutil.which("unattended-upgrade") is not None
-    configured = False
     dump = _run(["apt-config", "dump"], 10) or ""
-    match = re.search(r'^APT::Periodic::Unattended-Upgrade "(\d+)";', dump, re.M)
-    if match:
-        configured = int(match.group(1)) > 0
+
+    def periodic(name: str) -> int:
+        match = re.search(rf'^APT::Periodic::{name} "(\d+)";', dump, re.M)
+        return int(match.group(1)) if match else 0
+
+    configured = (
+        periodic("Unattended-Upgrade") > 0
+        and periodic("Update-Package-Lists") > 0
+        and not re.search(r'^APT::Periodic::Enable "0";', dump, re.M)
+    )
     timer = (_run(["systemctl", "is-enabled", "apt-daily-upgrade.timer"], 10) or "").strip()
-    timer_on = timer == "enabled"
+    timer_active = (_run(["systemctl", "is-active", "apt-daily-upgrade.timer"], 10) or "").strip()
+    timer_on = timer == "enabled" and timer_active == "active"
     return {
         "auto_security_updates": "on" if (installed and configured and timer_on) else "off",
         "auto_installed": installed,

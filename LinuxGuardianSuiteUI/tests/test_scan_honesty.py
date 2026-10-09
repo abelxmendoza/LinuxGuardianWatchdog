@@ -151,12 +151,14 @@ def test_the_exact_record_from_the_real_machine(tmp_path: Path) -> None:
 
 
 # ------------------------------------------- the real save pipeline, end to end
-def save(tmp_path: Path, rk_text: str | None) -> dict:
+def save(tmp_path: Path, rk_text: str | None, rk_rc: int = 1) -> dict:
     env = {**os.environ, "LG_HOME": str(tmp_path / "home")}
+    clean_clam = tmp_path / "clamscan-clean.log"      # the real sample has 79 unreadable files; isolate the rootkit logic
+    clean_clam.write_text(SAMPLE_CLAM.read_text().replace("Total errors: 79", "Total errors: 0"))
     cmd = [sys.executable, str(ROOT / "LinuxGuardianSuite" / "scan_store.py"), "save",
-           "--from-log", str(SAMPLE_CLAM), "--target", "/x", "--mode", "quick", "--clam-rc", "0"]
+           "--from-log", str(clean_clam), "--target", "/x", "--mode", "quick", "--clam-rc", "0"]
     if rk_text is not None:
-        cmd += ["--rk-log", str(rk_log(tmp_path, rk_text)), "--rk-rc", "1"]
+        cmd += ["--rk-log", str(rk_log(tmp_path, rk_text)), "--rk-rc", str(rk_rc)]
     subprocess.run(cmd, check=True, env=env, capture_output=True)
     return json.loads((tmp_path / "home" / "scans" / "last.json").read_text())
 
@@ -169,10 +171,10 @@ def test_saving_a_scan_where_rkhunter_refused_to_run(tmp_path: Path) -> None:
 
 
 def test_saving_a_scan_where_rkhunter_really_ran(tmp_path: Path) -> None:
-    data = save(tmp_path, REAL_RKHUNTER_LOG)
+    data = save(tmp_path, REAL_RKHUNTER_LOG, rk_rc=0)      # a clean rkhunter run exits 0
     assert data["rootkit_check"] == "ran" and data["rkhunter_warnings"] == 0
     assert format_last_scan(data)[0] == "Clean"
-    warned = save(tmp_path, REAL_RKHUNTER_LOG + "  Warning: The file properties have changed:\n  Warning: another\n")
+    warned = save(tmp_path, REAL_RKHUNTER_LOG + "  Warning: The file properties have changed:\n  Warning: another\n")   # rc 1 = warnings
     assert warned["rootkit_check"] == "ran" and warned["rkhunter_warnings"] == 2
     assert format_last_scan(warned)[0] == "2 rootkit warnings"
 
@@ -181,3 +183,21 @@ def test_saving_a_scan_with_no_rkhunter_log_at_all(tmp_path: Path) -> None:
     data = save(tmp_path, None)
     assert "rootkit_check" not in data
     assert format_last_scan(data)[0] == "No malware found"
+
+
+def test_unreadable_files_mean_the_scan_needs_review_even_when_rootkit_check_ran() -> None:
+    title, detail = card(rootkit_check="ran", rkhunter_warnings=0, errors=79)
+    assert title == "Scan needs review" and "ClamAV coverage incomplete" in detail and "79 unreadable" in detail
+    assert last_scan_severity({**BASE, "rootkit_check": "ran", "rkhunter_warnings": 0, "errors": 79}) == "warning"
+
+
+def test_clamav_killed_part_way_is_incomplete_but_exit_2_alone_is_not() -> None:
+    assert card(rootkit_check="ran", rkhunter_warnings=0, clam_rc=137)[0] == "Scan needs review"
+    assert card(rootkit_check="ran", rkhunter_warnings=0, clam_rc=2)[0] == "Clean"
+
+
+def test_rkhunter_error_exit_without_warnings_is_not_a_pass() -> None:
+    title, detail = card(rootkit_check="ran", rkhunter_warnings=0, rkhunter_rc=2)
+    assert title == "Scan needs review" and "Rootkit check needs review" in detail
+    # a skipped check keeps its own explanation: the old real record had rc=1 from "you must be root"
+    assert card(rootkit_check="needs_root", rkhunter_rc=1)[0] == "No malware found"

@@ -25,31 +25,41 @@ lg_require_cmd() {
   return 0
 }
 
-# Detects the system's active firewall front-end, if any.
 # Detects the active firewall front-end WITHOUT needing root.
 #
 # `ufw status`, `iptables` and `nft` all refuse to run for a normal user, so
 # asking them makes an *active* firewall look like "none" (the audit used to
 # report "No active firewall" on a machine with ufw enabled for exactly this
 # reason). What a normal user CAN read is ufw's config and the systemd state.
-# Rule-level checks only run when we happen to be root.
+#
+# Prints: ufw | firewalld | nftables | unknown | none
+#   unknown = raw nft/iptables rules exist (or can't be read) and need a human to
+#             interpret them; their mere presence does not prove protection.
+#   none    = every front-end we can read is verifiably off.
 lg_detect_firewall() {
-  local ufw_conf="${LG_UFW_CONF:-/etc/ufw/ufw.conf}"
+  local ufw_conf="${LG_UFW_CONF:-/etc/ufw/ufw.conf}" unknown=0 rules
   if { [ ! -r "$ufw_conf" ] || grep -qi '^ENABLED=yes' "$ufw_conf"; } \
      && systemctl is-active --quiet ufw 2>/dev/null; then
-    echo "ufw"
-  elif systemctl is-active --quiet firewalld 2>/dev/null; then
-    echo "firewalld"
-  elif systemctl is-active --quiet nftables 2>/dev/null; then
-    echo "nftables"
-  elif [ "$(id -u)" -eq 0 ] && command -v nft >/dev/null 2>&1 && nft list ruleset 2>/dev/null | grep -q .; then
-    echo "nftables"
-  elif [ "$(id -u)" -eq 0 ] && command -v iptables >/dev/null 2>&1 \
-       && iptables -S 2>/dev/null | grep -qE '^-A |^-P (INPUT|FORWARD) (DROP|REJECT)'; then
-    echo "iptables"
-  else
-    echo "none"
+    echo "ufw"; return
   fi
+  if systemctl is-active --quiet firewalld 2>/dev/null; then
+    echo "firewalld"; return
+  fi
+  if systemctl is-active --quiet nftables 2>/dev/null; then
+    echo "nftables"; return
+  fi
+  if [ "$(id -u)" -eq 0 ]; then
+    if command -v nft >/dev/null 2>&1; then
+      rules="$(nft list ruleset 2>/dev/null)" && { [ -z "$rules" ] || unknown=1; } || unknown=1
+    fi
+    if command -v iptables >/dev/null 2>&1 \
+       && iptables -S 2>/dev/null | grep -qE '^-A |^-P (INPUT|FORWARD) (DROP|REJECT)'; then
+      unknown=1
+    fi
+  elif command -v nft >/dev/null 2>&1 || command -v iptables >/dev/null 2>&1; then
+    unknown=1   # raw rules are root-only to read
+  fi
+  if [ "$unknown" -eq 1 ]; then echo "unknown"; else echo "none"; fi
 }
 
 # Records a structured incident for the GUI to pick up later.
