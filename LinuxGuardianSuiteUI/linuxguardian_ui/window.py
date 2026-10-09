@@ -13,6 +13,7 @@ from linuxguardian_ui.pages.cache_cleaner import CacheCleanerPage  # noqa: E402
 from linuxguardian_ui.pages.dashboard import DashboardPage  # noqa: E402
 from linuxguardian_ui.pages.exposure import ExposurePage  # noqa: E402
 from linuxguardian_ui.pages.processes import ProcessesPage  # noqa: E402
+from linuxguardian_ui.pages.timeline import TimelinePage  # noqa: E402
 from linuxguardian_ui.pages.updates import UpdatesPage  # noqa: E402
 
 
@@ -71,7 +72,10 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
             ExposurePage(self.toast_overlay), "exposure", "Exposure"
         )
         exposure_page.set_icon_name("network-wired-symbolic")
-        # Future pages: incidents history, settings — see docs/ROADMAP.md
+
+        timeline_page = stack.add_titled(TimelinePage(self.toast_overlay), "timeline", "Timeline")
+        timeline_page.set_icon_name("document-open-recent-symbolic")
+        # Future pages: settings — see docs/ROADMAP.md
 
     def _show_about(self, _btn: Gtk.Button) -> None:
         about = Gtk.AboutDialog(transient_for=self, modal=True)

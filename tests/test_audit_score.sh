@@ -31,6 +31,15 @@ echo "$out" | grep -q "\[WARN\] Rootkit check has not run yet" && pass "a skippe
 setlast cancelled; echo "$(audit)" | grep -q "\[WARN\] Rootkit check has not run" && pass "a cancelled rootkit check warns" || bad "cancelled"
 rm -f "$SB/home/scans/last.json"; echo "$(audit)" | grep -q "\[WARN\] Rootkit check has not run" && pass "never scanned warns" || bad "never scanned"
 
+# Re-running the audit must not write the same findings again; fixing one records a resolution.
+nevents() { find "$SB/home/incidents" -name '*.json' 2>/dev/null | wc -l; }
+rm -rf "$SB/home/incidents" "$SB/home/state"; setdefs "6 days ago"; setlast needs_root
+audit >/dev/null; first="$(nevents)"; audit >/dev/null; audit >/dev/null; again="$(nevents)"
+[ "$first" -gt 0 ] && [ "$first" = "$again" ] && pass "re-running the audit writes no duplicate events ($first events after 3 runs)" || bad "events: first=$first after3=$again"
+setdefs "1 hour ago"; audit >/dev/null
+grep -rl "Resolved: Virus definitions" "$SB/home/incidents" >/dev/null 2>&1 && pass "fixing a finding records a 'Resolved' event" || bad "no resolved event"
+setdefs "6 days ago"; setlast needs_root
+
 # Rating = round-half-up((pass + warn/2) / total), computed once, here.
 out="$(audit)"
 plain="$(sed 's/\x1b\[[0-9;]*m//g' <<<"$out")"

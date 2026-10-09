@@ -13,22 +13,26 @@ source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/utils.sh"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  grep '^#' "$0" | sed 's/^# \{0,1\}//;1d'
+  awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
   exit 0
 fi
 
 PASS=0
 FAIL=0
 WARN=0
+# Findings are collected and turned into events once, at the end, by audit_events.py: only NEW
+# findings (and resolved ones) become events, so re-running the audit doesn't flood the timeline.
+FINDINGS="$(mktemp)"
+trap 'rm -f "$FINDINGS"' EXIT
 
 check() {
   local label="$1" status="$2" detail="${3:-}"
   case "$status" in
     pass) lg_ok "$label"; PASS=$((PASS+1)) ;;
     warn) lg_warn "$label${detail:+ — $detail}"; WARN=$((WARN+1))
-          lg_record_incident "audit" "warning" "$label${detail:+ — $detail}" ;;
+          printf 'warning\t%s\n' "$label${detail:+ — $detail}" >> "$FINDINGS" ;;
     fail) lg_error "$label${detail:+ — $detail}"; FAIL=$((FAIL+1))
-          lg_record_incident "audit" "critical" "$label${detail:+ — $detail}" ;;
+          printf 'critical\t%s\n' "$label${detail:+ — $detail}" >> "$FINDINGS" ;;
   esac
 }
 
@@ -158,6 +162,8 @@ fi
 echo "================================"
 TOTAL=$((PASS+FAIL+WARN))
 echo "Score: ${LG_C_GREEN}$PASS pass${LG_C_RESET}, ${LG_C_YELLOW}$WARN warn${LG_C_RESET}, ${LG_C_RED}$FAIL fail${LG_C_RESET} (of $TOTAL checks)"
+
+python3 "$SCRIPT_DIR/audit_events.py" < "$FINDINGS" 2>/dev/null || true
 
 # Rating: a warning is half a pass (it is a real gap, but not a broken system); a fail is nothing.
 # Rounded half up. The app shows this number, so it is computed in exactly one place.
