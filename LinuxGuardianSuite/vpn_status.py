@@ -101,12 +101,18 @@ def proton_status() -> dict:
     proton = [c for c in conns if is_proton_name(c["name"]) and not c["name"].lower().startswith("pvpn-")]
     kill = [c for c in conns if c["name"].lower().startswith(KILLSWITCH_PREFIXES) or c["device"] == "ipv6leakintrf0"]
     active = [c for c in proton if c["active"]]
+    # Also look at the network interfaces themselves: the app may bring the tunnel up in a way NetworkManager doesn't list.
+    rc, links = _run(["ip", "-o", "link", "show"])
+    tunnels = re.findall(r"^\d+:\s+(proton\d*|pvpn\w*)[:@]\s.*<([^>]*)>", links, re.M) if rc == 0 else []
+    live = [name for name, flags in tunnels if "UP" in flags.split(",") and "LOWER_UP" in flags.split(",")]
+    connected = bool(active) or bool(live)
+    device = active[0]["device"] if active else (live[0] if live else "")
     return {
-        "installed": bool(packages) or bool(proton) or bool(kill),
+        "installed": bool(packages) or bool(proton) or bool(kill) or bool(tunnels),
         "packages": packages,
-        "connected": bool(active),
-        "connection": active[0]["name"] if active else "",
-        "device": active[0]["device"] if active else "",
+        "connected": connected,
+        "connection": active[0]["name"] if active else (f"tunnel {live[0]}" if live else ""),
+        "device": device,
         "killswitch_present": bool(kill),
         "killswitch_names": [c["name"] for c in kill],
         "nm_available": rc == 0,
@@ -245,7 +251,7 @@ def analyse(ts: dict, px: dict, net: dict) -> list[dict]:
 
     # Proton on its own
     if not px.get("installed"):
-        add("info", "Proton VPN isn't installed (or isn't managed by NetworkManager)")
+        add("info", "Proton VPN not detected (not installed, or not connected through NetworkManager)")
     elif px["connected"]:
         add("ok", f"Proton VPN is connected ({px['connection']})")
     else:

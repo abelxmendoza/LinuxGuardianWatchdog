@@ -48,7 +48,6 @@ class HardeningPage(Gtk.Box):
         self._toast_overlay = toast_overlay
         self._checks: list[dict] = []
         self._busy = False
-        self._vpn: dict | None = None
         for side in ("top", "bottom", "start", "end"):
             getattr(self, f"set_margin_{side}")(24)
 
@@ -95,24 +94,14 @@ class HardeningPage(Gtk.Box):
         self.checks_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         body.append(self.checks_box)
 
-        # ---- VPN
-        body.append(section_header("Privacy & VPN (Tailscale and Proton VPN)"))
-        self.vpn_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self.vpn_card.add_css_class("omega-card")
-        body.append(self.vpn_card)
-        self.vpn_status = _label("Checking VPNs…", "omega-dim")
-        self.vpn_card.append(self.vpn_status)
-        vbuttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        self.vpn_card.append(vbuttons)
-        self.vpn_btn = Gtk.Button(label="Run VPN diagnostics")
-        self.vpn_btn.connect("clicked", lambda _b: self.refresh_vpn(ping=True))
-        vbuttons.append(self.vpn_btn)
-        self.ip_btn = Gtk.Button(label="Check my public IP…")
-        self.ip_btn.set_tooltip_text("Makes ONE request to Cloudflare's trace page to see which address the internet sees. Only when you click.")
-        self.ip_btn.connect("clicked", lambda _b: self.refresh_vpn(public_ip=True))
-        vbuttons.append(self.ip_btn)
-        self.vpn_findings = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.vpn_card.append(self.vpn_findings)
+        # ---- VPN lives on its own tab now
+        vpn_note = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        vpn_note.add_css_class("guardian-banner")
+        vpn_note.append(_label("Tailscale and Proton VPN status has its own tab.", None))
+        go = Gtk.Button(label="Open VPN tab")
+        go.connect("clicked", self._open_vpn_tab)
+        vpn_note.append(go)
+        body.append(vpn_note)
 
         # ---- diagnostics
         body.append(section_header("Diagnostics: is everything working?"))
@@ -135,7 +124,6 @@ class HardeningPage(Gtk.Box):
         self._diag_text = ""
 
         self.refresh()
-        self.refresh_vpn()
 
     # ---- helpers --------------------------------------------------------------
     def _toast(self, text: str) -> None:
@@ -315,53 +303,10 @@ class HardeningPage(Gtk.Box):
         fx = todo.pop(0)
         self._run_fix(fx, "apply", then=lambda: self._run_queue(todo))
 
-    # ---- VPN --------------------------------------------------------------------
-    def refresh_vpn(self, ping: bool = False, public_ip: bool = False) -> None:
-        args = ["--json"] + (["--tailscale-ping"] if ping else []) + (["--public-ip"] if public_ip else [])
-        self.vpn_status.set_label("Checking VPNs…")
-
-        def done(code: int, lines: list[str]) -> None:
-            try:
-                self._vpn = json.loads("".join(lines))
-            except json.JSONDecodeError:
-                self.vpn_status.set_label("Couldn't read VPN status.")
-                return
-            self._render_vpn()
-
-        run_sync_async("vpn_status.py", args, done, timeout=45.0)
-
-    def _render_vpn(self) -> None:
-        r = self._vpn or {}
-        ts, px = r.get("tailscale", {}), r.get("proton", {})
-
-        def pill(name: str, ok: bool | None, text: str) -> str:
-            return f"{name}: {'●' if ok else '○'} {text}"
-
-        ts_text = "connected" if ts.get("state") == "Running" and ts.get("online") else ("not installed" if not ts.get("installed") else "off or needs sign-in")
-        px_text = "connected" if px.get("connected") else ("not installed" if not px.get("installed") else "not connected")
-        self.vpn_status.set_label("   ".join([pill("Tailscale", ts.get("state") == "Running" and ts.get("online"), ts_text),
-                                              pill("Proton VPN", px.get("connected"), px_text)]))
-        self._clear(self.vpn_findings)
-        for f in r.get("findings", []):
-            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            row.append(self._chip({"ok": "ok", "attention": "attention", "info": "info"}[f["level"]]))
-            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
-            col.append(_label(f["title"]))
-            if f.get("detail"):
-                col.append(_label(f["detail"], "omega-dim"))
-            if f.get("advice") and f["level"] == "attention":
-                col.append(_label("What to do: " + f["advice"], "omega-warning", selectable=True))
-            row.append(col)
-            self.vpn_findings.append(row)
-        if "public_ip" in r:
-            p = r["public_ip"]
-            text = f"The internet sees you as {p['ip']}" + (f" ({p['loc']})" if p.get("loc") else "") if p.get("ip") else f"Couldn't check: {p.get('error', 'no answer')}"
-            self.vpn_findings.append(_label(text, "omega-heading"))
-            if px.get("connected"):
-                self.vpn_findings.append(_label("With Proton connected this should be a Proton server in the country you chose, not your home address.", "omega-dim"))
-        if "tailscale_ping" in r:
-            pg = r["tailscale_ping"]
-            self.vpn_findings.append(_label(("Reached a Tailscale device: " if pg["ok"] else "Couldn't reach a Tailscale device: ") + pg["detail"], "omega-heading" if pg["ok"] else "omega-warning"))
+    def _open_vpn_tab(self, _btn: Gtk.Button) -> None:
+        stack = getattr(self.get_root(), "view_stack", None)
+        if stack is not None:
+            stack.set_visible_child_name("vpn")
 
     # ---- diagnostics ---------------------------------------------------------------
     def run_diagnostics(self) -> None:

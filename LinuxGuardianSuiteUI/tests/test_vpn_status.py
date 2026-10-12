@@ -235,3 +235,25 @@ def test_public_ip_check_is_never_part_of_the_default_collect(monkeypatch):
 
 def test_tailscale_ping_refuses_odd_input():
     assert vs.tailscale_ping("1.2.3.4; reboot")["ok"] is False
+
+
+def test_proton_tunnel_is_found_from_the_network_interface_even_if_networkmanager_does_not_list_it(tmp_path, monkeypatch):
+    b = tmp_path / "bin"
+    b.mkdir()
+    stub(b, "nmcli", "exit 0")
+    stub(b, "dpkg-query", "exit 1")
+    stub(b, "ip", 'echo "7: proton0: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1420 qdisc noqueue state UNKNOWN mode DEFAULT"')
+    monkeypatch.setenv("PATH", f"{b}:{os.environ['PATH']}")
+    px = vs.proton_status()
+    assert px["installed"] and px["connected"] and px["device"] == "proton0"
+
+
+def test_a_down_proton_interface_is_not_called_connected(tmp_path, monkeypatch):
+    b = tmp_path / "bin"
+    b.mkdir()
+    stub(b, "nmcli", "exit 0")
+    stub(b, "dpkg-query", "exit 1")
+    stub(b, "ip", 'echo "7: proton0: <POINTOPOINT,NOARP> mtu 1420 qdisc noop state DOWN"')
+    monkeypatch.setenv("PATH", f"{b}:{os.environ['PATH']}")
+    px = vs.proton_status()
+    assert px["installed"] and not px["connected"]

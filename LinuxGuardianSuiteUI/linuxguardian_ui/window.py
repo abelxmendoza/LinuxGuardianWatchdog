@@ -17,12 +17,13 @@ from linuxguardian_ui.pages.hardening import HardeningPage  # noqa: E402
 from linuxguardian_ui.pages.processes import ProcessesPage  # noqa: E402
 from linuxguardian_ui.pages.timeline import TimelinePage  # noqa: E402
 from linuxguardian_ui.pages.updates import UpdatesPage  # noqa: E402
+from linuxguardian_ui.pages.vpn import VpnPage  # noqa: E402
 
 
 class LinuxGuardianWindow(Adw.ApplicationWindow):
     def __init__(self, app: Adw.Application) -> None:
         super().__init__(application=app, title="LinuxGuardian Watchdog")
-        self.set_default_size(1200, 780)
+        self.set_default_size(1280, 800)
 
         # Adw.ToolbarView needs libadwaita >= 1.4; build the header + content
         # layout by hand instead so this also runs on 1.1-1.3 (e.g. Ubuntu 22.04).
@@ -58,6 +59,9 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
 
         hardening_page = stack.add_titled(HardeningPage(self.toast_overlay), "hardening", "Hardening")
         hardening_page.set_icon_name("security-medium-symbolic")
+
+        vpn_page = stack.add_titled(VpnPage(self.toast_overlay), "vpn", "VPN")
+        vpn_page.set_icon_name("network-vpn-symbolic")
 
         processes_page = stack.add_titled(
             ProcessesPage(self.toast_overlay), "processes", "Processes"

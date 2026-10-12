@@ -120,9 +120,14 @@ class DashboardPage(Gtk.Box):
         self.vpn_line = Gtk.Label(label="", xalign=0, wrap=True)
         self.vpn_line.add_css_class("omega-dim")
         hard_card.append(self.vpn_line)
-        review_btn = Gtk.Button(label="Review and fix…", halign=Gtk.Align.START, margin_top=4)
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, margin_top=4)
+        review_btn = Gtk.Button(label="Review and fix…")
         review_btn.connect("clicked", self._open_hardening_tab)
-        hard_card.append(review_btn)
+        btn_row.append(review_btn)
+        vpn_btn = Gtk.Button(label="VPN details")
+        vpn_btn.connect("clicked", lambda _b: self._open_tab("vpn"))
+        btn_row.append(vpn_btn)
+        hard_card.append(btn_row)
 
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         actions.add_css_class("process-toolbar")
@@ -589,10 +594,12 @@ class DashboardPage(Gtk.Box):
 
     # ---- hardening + VPN summary ----------------------------------------
     def _open_hardening_tab(self, _btn: Gtk.Button) -> None:
-        win = self.get_root()
-        stack = getattr(win, "view_stack", None)
+        self._open_tab("hardening")
+
+    def _open_tab(self, name: str) -> None:
+        stack = getattr(self.get_root(), "view_stack", None)
         if stack is not None:
-            stack.set_visible_child_name("hardening")
+            stack.set_visible_child_name(name)
 
     def _refresh_hardening(self) -> None:
         def done(code: int, lines: list[str]) -> None:
