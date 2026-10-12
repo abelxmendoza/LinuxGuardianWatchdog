@@ -171,6 +171,34 @@ nothing is silenced or allow-listed, and nothing executes after the model answer
 model `claude-opus-5-5`, JSON-schema structured output, no tools, no sampling parameters, and the server-side `fallbacks` beta
 requested by default with automatic degradation to a plain request if the beta isn't accepted.
 
+### Free known-bad addresses (threat intelligence)
+
+`threat_intel.py` checks every established outbound connection against two free public lists that need no account:
+FireHOL level 1 (attack sources and hijacked networks) and abuse.ch's Feodo Tracker (botnet command-and-control servers).
+(URLhaus is deliberately not used: it needs a login and an Auth-Key.) It is off until you press "Download free lists"; after
+that the live monitor refreshes at most once a day. Lookups are local, so none of your addresses is ever sent anywhere.
+A hit is a **critical** `threat_intel_hit` finding that fires even during the 3-day learning window and even for an
+allow-listed program (trusting a program doesn't make its server trustworthy); it becomes its own incident, whose story
+says plainly that blocklists have false positives. Safety of the download itself: https only, a fixed host allow-list, no
+redirects followed, an 8 MB cap, every line parsed strictly, private/reserved/multicast/absurdly wide ranges discarded (so a
+poisoned list can't make your own network look hostile), and a download that looks wrong keeps the previous copy.
+
+### Free local AI and the quality check
+
+A paid cloud model isn't needed. `local_ai.py` reads your hardware (graphics memory, RAM, free disk), rates a short list of
+Ollama models "fits / tight / slow / too big" for it, shows the official Ollama install command to copy (LinuxGuardian never
+runs that installer for you: it installs software as root), downloads a chosen model only on a confirmed click (validated
+name, through your own local Ollama, resumable), and sets it as the investigator's backend.
+
+A small model can be confidently wrong, so `ai_eval.py` grades it before you rely on it. It runs 17 made-up incidents through
+exactly the production prompt and message builder: 6 real attacks, 6 harmless look-alikes (an AppImage in /tmp, a browser
+update, a USB dock...), 2 genuinely ambiguous ones and 3 that try to give the AI orders. Each answer is scored on the verdict,
+on noticing the injection, on the format, and on not suggesting risky commands. Missing an attack matters most: **Good**
+needs every attack and trick caught, no format failures and no risky commands; **Use with caution** and **Not reliable**
+follow. A grade belongs to one model and one version of the prompt and test set, so it is marked out of date when either
+changes. The test incidents contain nothing from your laptop and are sent only to a local model; a cloud model is refused
+unless explicitly allowed (it costs money). Investigations with an ungraded or weak local model show a banner saying so.
+
 ## Activity view
 
 Scripts print terminal text; the Dashboard shows it as plain-language CARDS instead. `activity.py` (pure Python, no GTK)

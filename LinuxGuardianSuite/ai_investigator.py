@@ -475,7 +475,7 @@ def investigate(incident_id: str, backend: Backend | None = None, question: str 
     result = validate_result(parse_json(text), prep.incident.severity, cfg["redaction"])
     run = {"id": secrets.token_hex(6), "incident_id": incident_id, "time": time.time(), "backend": backend.name, "model": backend.model,
            "destination": backend.destination, "redaction": prep.redaction, "sent_system": SYSTEM_PROMPT, "sent_user": user,
-           "received_raw": text[:20000], "result": result, "meta": meta, "turns": []}
+           "received_raw": text[:20000], "result": result, "meta": meta, "turns": [], "model_grade": model_grade({"backend": backend.name, "ollama_model": backend.model})}
     _save_run(run)
     return run
 
@@ -499,6 +499,16 @@ def follow_up(run_id: str, question: str, backend: Backend | None = None, confir
 
 
 # ============================================================ status & test
+def model_grade(cfg: dict | None = None) -> dict | None:
+    """The quality-check result for the chosen LOCAL model (None for cloud or off: those aren't ours to grade)."""
+    cfg = cfg or load_config()
+    if cfg["backend"] != "ollama" or not cfg["ollama_model"]:
+        return None
+    import ai_eval  # imported here: ai_eval itself imports this module
+
+    return ai_eval.grade_for(cfg["ollama_model"])
+
+
 def ollama_models(url: str = OLLAMA_URL) -> list[str] | None:
     try:
         with urllib.request.urlopen(url.rstrip("/") + "/api/tags", timeout=3) as r:  # noqa: S310
@@ -524,7 +534,7 @@ def status() -> dict:
         if not api_key():
             problems.append("No API key saved. Add one in AI settings (or set ANTHROPIC_API_KEY).")
     return {"config": cfg, "configured": cfg["backend"] != "off" and not problems, "problems": problems, "ollama_reachable": models is not None,
-            "ollama_models": models or [], "sdk_installed": sdk_installed(), "key_present": bool(api_key()),
+            "ollama_models": models or [], "sdk_installed": sdk_installed(), "key_present": bool(api_key()), "model_grade": model_grade(cfg),
             "destination": ("this laptop" if cfg["backend"] == "ollama" else "api.anthropic.com" if cfg["backend"] == "anthropic" else "nowhere (off)")}
 
 

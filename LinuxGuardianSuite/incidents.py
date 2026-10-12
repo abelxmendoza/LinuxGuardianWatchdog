@@ -105,6 +105,13 @@ def cluster(obs: list[Obs]) -> list[list[Obs]]:
 
 # (events that must ALL be present) -> title, why it matters, why it is often harmless, what to check
 STORIES: list[tuple[frozenset, str, str, str, list[str]]] = [
+    (frozenset({"threat_intel_hit"}), "A program is connected to an address on a public blocklist",
+     "The remote address is listed by security researchers as an attack source or a botnet control server. A program on this laptop that talks to one "
+     "may be infected, or may be fetching something it shouldn't.",
+     "Blocklists have false positives, and addresses get reassigned: a shared host that was abused last month can be innocent now. "
+     "A browser visiting a site on a hijacked network can also match.",
+     ["Open the Processes tab and find the program (the evidence bundle names it)", "ss -tnp | grep <remote address>",
+      "Look the address up at abuse.ch or abuseipdb.com", "If you don't recognise the program, collect evidence before stopping it"]),
     (frozenset({"failed_logins", "__critical__"}), "Someone guessed their way in",
      "Many failed logins followed by a success from the same address is how password guessing ends when it works.",
      "A forgetful you, or a script of yours, can look the same. Check whether the address is yours.",

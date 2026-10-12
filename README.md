@@ -60,6 +60,9 @@ LinuxGuardianWatchdog/
 │   ├── sensors.py               # Blue-team sensors (logins, processes, network, startup entries, accounts, USB)
 │   ├── ai_investigator.py       # Opt-in AI that explains incidents (redacted, validated, advisory only)
 │   ├── ai_safety.py             # Redaction + the read-only command allow-list around the AI
+│   ├── ai_eval.py               # Quality check: grades a local AI model on made-up attacks and tricks
+│   ├── local_ai.py              # Free local AI setup: hardware fit, Ollama steps, model download
+│   ├── threat_intel.py          # Known-bad address lists (free, no account) checked against connections
 │   ├── incidents.py             # Groups sensor events into explained incidents
 │   ├── evidence.py              # Read-only evidence bundle for an incident
 │   ├── hardening.py             # Hardening checklist with previewed, undoable fixes
@@ -112,6 +115,9 @@ cd LinuxGuardianSuite
 ./timeline.py --min-severity warning       # the security timeline from the terminal
 ./sensors.py --run                         # blue team: look for attacks in progress (the timer runs this every 5 minutes)
 ./ai_investigator.py --status               # optional AI investigator (off by default; local Ollama or Claude)
+./local_ai.py --status                     # free local AI: what your laptop can run, and the next setup step
+./ai_eval.py --run --model qwen2.5:7b      # grade a local model on 17 made-up incidents (Good / Use with caution / Not reliable)
+./threat_intel.py --update                 # download the free known-bad address lists (and turn the check on)
 ./incidents.py                             # related events grouped into plain-language incidents
 ./evidence.py --incident ID                # read-only evidence bundle for an incident
 ./hardening.py --check                     # hardening checklist: what's weak, why, and the fix (no root)

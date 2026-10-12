@@ -130,6 +130,7 @@ class IncidentsView(Gtk.Box):
         if s.get("learning") and s.get("learning_until"):
             self.status_card.append(_label(f"Learning what's normal on this laptop until {_when(s['learning_until'])}. During this time the network "
                                            "sensor stays quiet so it doesn't cry wolf; the others already alert.", "omega-warning"))
+        self._render_intel(s.get("threat_intel") or {})
         problems = [x for x in sensors if x["ok"] is False]
         if problems:
             ex = Gtk.Expander(label=f"{len(problems)} sensor(s) can't work fully")
@@ -138,6 +139,49 @@ class IncidentsView(Gtk.Box):
                 inner.append(_label(f"{x['name']}: {x['error']}", "omega-warning", selectable=True))
             ex.set_child(inner)
             self.status_card.append(ex)
+
+    def _render_intel(self, intel: dict) -> None:
+        """One row for the free known-bad-address lists: what it does now, and the button to turn it on or refresh it."""
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        css = {"ok": "omega-heading", "warning": "omega-warning"}.get(intel.get("level"), "omega-dim")
+        row.append(_label("Known-bad addresses: " + (intel.get("text") or "unavailable"), css))
+        row.get_first_child().set_hexpand(True)
+        on = bool(intel.get("enabled"))
+        btn = Gtk.Button(label="Update lists" if on else "Download free lists")
+        btn.set_tooltip_text("Downloads two free public lists of attacker and botnet addresses. Matching happens on this laptop only.")
+        btn.connect("clicked", self._on_update_intel if on else self._on_enable_intel)
+        row.append(btn)
+        if on:
+            off = Gtk.Button(label="Turn off")
+            off.connect("clicked", self._on_intel_off)
+            row.append(off)
+        self.status_card.append(row)
+
+    def _on_enable_intel(self, btn: Gtk.Button) -> None:
+        confirm(self.get_root(), "Check connections against known-bad addresses?",
+                "LinuxGuardian will download two free, public lists (FireHOL level 1 from GitHub, and abuse.ch's Feodo Tracker). They contain "
+                "internet addresses that researchers have flagged as attack sources or botnet control servers.\n\nThe lists are refreshed at most once a "
+                "day while live monitoring runs. Matching happens on this laptop: none of your connections or addresses are ever sent anywhere. "
+                "A match is reported as a critical finding; nothing is blocked.", "Download lists",
+                lambda: self._run_intel_update(btn), destructive=False)
+
+    def _on_update_intel(self, btn: Gtk.Button) -> None:
+        self._run_intel_update(btn)
+
+    def _run_intel_update(self, btn: Gtk.Button) -> None:
+        btn.set_sensitive(False)
+
+        def done(code: int, lines: list[str]) -> None:
+            self._toast("Lists updated" if code == 0 else (lines[-1] if lines else "Couldn't download the lists"))
+            self.refresh()
+
+        run_sync_async("threat_intel.py", ["--update", "--force"], done, timeout=120.0)
+
+    def _on_intel_off(self, _btn: Gtk.Button) -> None:
+        confirm(self.get_root(), "Turn off known-bad address checking?",
+                "The downloaded lists are deleted and connections are no longer compared against them.", "Turn off",
+                lambda: run_sync_async("threat_intel.py", ["--off"], lambda c, l: (self._toast("Turned off"), self.refresh()), timeout=30.0),
+                destructive=False)
 
     def _on_check_now(self, btn: Gtk.Button) -> None:
         btn.set_sensitive(False)

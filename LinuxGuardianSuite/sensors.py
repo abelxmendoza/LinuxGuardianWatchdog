@@ -6,7 +6,8 @@ Incidents and notifications already understand. No AI here: every rule is plain,
 
   auth       failed logins, a login right after failures, new accounts, sensitive sudo use   (/var/log/auth.log)
   processes  programs running from /tmp, whose file was deleted, or pretending to be kernel threads   (/proc)
-  network    a program talking to the internet for the first time, or on a suspicious port    (ss)
+  network    a program talking to the internet for the first time, on a suspicious port, or to a
+             known-bad address from the free public blocklists (threat_intel.py)               (ss)
   autoruns   new startup entries, cron jobs, user services, shell start-up changes
   accounts   new users, uid 0 accounts, new members of the admin group           (/etc/passwd, /etc/group)
   usb        new USB devices, especially keyboard-like ones that also pretend to be storage
@@ -41,6 +42,7 @@ SUITE_DIR = Path(__file__).resolve().parent
 if str(SUITE_DIR) not in sys.path:
     sys.path.insert(0, str(SUITE_DIR))
 
+import threat_intel  # noqa: E402
 from events import lg_home, record_event  # noqa: E402
 
 LEARN_SECONDS = 3 * 86400            # network behaviour is only learned, not alerted on, for this long after the first run
@@ -327,12 +329,22 @@ def sensor_network(ctx: Ctx) -> list[Finding]:
     programs: dict = base.setdefault("programs", {})
     findings: list[Finding] = []
     proc_exe = {p["pid"]: p for p in iter_processes()}
+    intel = threat_intel.load()
     for row in parse_ss(out_text):
         if private_or_local(row["ip"]):
             continue
         proc = proc_exe.get(row["pid"], {"exe": "", "args": [], "comm": row["comm"], "uid": -1})
         exe = proc["exe"].removesuffix(" (deleted)") or row["comm"]
         ident = script_of(proc) or exe                      # judge a python script by the script, not by python
+        hit = intel.match(row["ip"]) if intel else []
+        if hit:
+            # Checked before the allow-list and during learning: a program being trusted doesn't make its server trustworthy.
+            findings.append(Finding(f"ti:{row['ip']}:{ident}", "critical", "threat_intel_hit",
+                                    f"{os.path.basename(ident) or row['comm']} is connected to {row['ip']}, an address on a public blocklist: "
+                                    f"{threat_intel.describe_hit(hit)}.",
+                                    [exe] + ([ident] if ident != exe else []) + [row["ip"]], "T1071", "network",
+                                    {"pid": row["pid"], "process": row["comm"], "exe": exe, "remote": row["ip"], "port": row["port"],
+                                     "protocol": "tcp", "lists": hit}))
         if is_allowed(exe, ctx.allow) or is_allowed(ident, ctx.allow):
             continue
         entry = programs.get(ident)
@@ -611,6 +623,7 @@ def run_once() -> dict:
     state.setdefault("first_run", t)
     learning = (t - state["first_run"]) < LEARN_SECONDS
     ctx = Ctx(state, t, first_run, learning, load_allow())
+    threat_intel.refresh_if_due()                  # no-op unless the person turned known-bad address checking on
     seen: dict = state.setdefault("seen", {})
     report = {"time": t, "first_run": first_run, "learning": learning, "sensors": {}, "recorded": 0}
     for name, fn in SENSORS.items():
@@ -649,6 +662,7 @@ def status() -> dict:
     return {
         "active": bool(state.get("last_run")), "timer": timer_enabled(), "first_run": fr, "last_run": state.get("last_run"),
         "learning_until": (fr + LEARN_SECONDS) if fr else None, "learning": bool(fr and (t - fr) < LEARN_SECONDS),
+        "threat_intel": threat_intel.status(),
         "sensors": [{"name": n, "description": DESCRIPTIONS[n], "ok": last.get(n, {}).get("ok", None), "error": last.get(n, {}).get("error", "")} for n in SENSORS],
     }
 

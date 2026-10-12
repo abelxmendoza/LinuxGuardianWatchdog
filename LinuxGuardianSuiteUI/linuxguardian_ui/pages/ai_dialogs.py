@@ -15,6 +15,7 @@ from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
+from linuxguardian_ui.pages.local_ai_window import LocalAiWindow, grade_banner, grade_summary  # noqa: E402
 from linuxguardian_ui.scripts import run_sync_async  # noqa: E402
 
 VERDICT = {
@@ -83,6 +84,12 @@ class AiSettingsWindow(Gtk.Window):
         self.local_box.append(self.local_models)
         self.local_hint = _label("", "omega-dim")
         self.local_box.append(self.local_hint)
+        self.local_grade = _label("", "omega-dim")
+        self.local_box.append(self.local_grade)
+        setup = Gtk.Button(label="Free local AI setup…", halign=Gtk.Align.START)
+        setup.set_tooltip_text("Find a model that fits your laptop, download it, and grade how good it is. Free, and nothing leaves this machine.")
+        setup.connect("clicked", lambda _b: LocalAiWindow(self, self._toast_overlay, on_changed=self._load).present())
+        self.local_box.append(setup)
 
         self.cloud_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.append(self.cloud_box)
@@ -154,7 +161,9 @@ class AiSettingsWindow(Gtk.Window):
                 self.claude_model.set_selected(CLAUDE_MODELS.index(cfg["model"]))
             self.redaction.set_selected(1 if cfg.get("redaction") == "strict" else 0)
             self.local_hint.set_label("Ollama is running." if self._status.get("ollama_reachable") else
-                                      "Ollama isn't running. Install it from ollama.com, run `ollama serve`, then `ollama pull <a model>` (8 GB of GPU memory handles 7-8B models well).")
+                                      "Ollama isn't running. The setup guide below walks you through installing it and picking a model (8 GB of GPU memory handles 7-8B models well).")
+            mg = self._status.get("model_grade")
+            self.local_grade.set_label(("Quality check: " + grade_summary(mg)) if mg else "")
             sdk = self._status.get("sdk_installed")
             self.cloud_hint.set_label(("Anthropic's SDK is installed. " if sdk else "Install Anthropic's official SDK first:  pip install anthropic.  ")
                                       + ("An API key is saved." if self._status.get("key_present") else "No API key yet (or set ANTHROPIC_API_KEY)."))
@@ -261,6 +270,7 @@ class InvestigationWindow(Gtk.Window):
             self.stage.append(btn)
             return
         self._cloud = st["config"]["backend"] == "anthropic"
+        self._grade = st.get("model_grade")
         run_sync_async("ai_investigator.py", ["--prepare", self._incident["id"]], self._on_prepared, timeout=90.0)
 
     def _on_prepared(self, code: int, lines: list[str]) -> None:
@@ -270,6 +280,9 @@ class InvestigationWindow(Gtk.Window):
             self.stage.append(_label(p["error"], "omega-critical"))
             return
         self._destination = p["destination"]
+        banner = grade_banner(getattr(self, "_grade", None), self._open_setup)
+        if banner is not None:
+            self.stage.append(banner)
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         card.add_css_class("omega-card")
         self.stage.append(card)
@@ -317,8 +330,14 @@ class InvestigationWindow(Gtk.Window):
             return
         self._run_id = r["id"]
         self.stage.append(_label(f"Done. Saved to ~/.linuxguardian/ai_log/{r['id']}.json (exactly what was sent and received).", "omega-dim"))
+        banner = grade_banner(r.get("model_grade"), self._open_setup)
+        if banner is not None:
+            self.results.append(banner)
         self._show(r["result"], self.results)
         self._add_follow_up()
+
+    def _open_setup(self) -> None:
+        LocalAiWindow(self, self._toast_overlay).present()
 
     def _show(self, res: dict, into: Gtk.Box) -> None:
         text, card_css, label_css = VERDICT[res["verdict"]]

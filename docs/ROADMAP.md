@@ -53,7 +53,11 @@ macOS original's feature set:
 - [ ] Blue team phase 2: more sensors (journald, browser-extension/npm/pip install watchers, DNS anomalies, ptrace/inject)
 - [x] Blue team phase 3: opt-in AI investigator on top of incident + evidence (local Ollama or Claude via the official SDK;
       redacted, previewed, validated, read-only checks only, never overrules the sensors, fully audited)
-- [ ] AI: optional daily triage digest (ranks open incidents), project-aware context (which ROS nodes you run), local-model eval set
+- [x] Free local AI setup (hardware fit, Ollama steps, model download) and a local-model quality check (17 made-up incidents,
+      graded Good / Use with caution / Not reliable)
+- [x] Known-bad address matching (FireHOL level 1 + abuse.ch Feodo Tracker, free, no account, matched locally) feeding the network sensor
+- [ ] AI: optional daily triage digest (ranks open incidents), project-aware context (which ROS nodes you run)
+- [ ] Threat intel: domain/DNS lists, and checking listening-port peers (not only established outbound connections)
 - [ ] Hardening: backup check (is there a recent snapshot?), outbound connection visibility, DNS-over-TLS toggle
 - [ ] ROS firewall: Tailscale preset, and `ufw allow in proto igmp` as an explained one-click
 - [ ] Real integration tests for the privileged paths (apt, apt-mark, unattended-upgrade) inside a

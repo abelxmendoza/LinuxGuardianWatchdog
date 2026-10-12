@@ -489,3 +489,35 @@ def test_cli_prepare_and_confirmation_gate(sandbox, capsys, monkeypatch):
     assert ai.main() == 4 and json.loads(capsys.readouterr().out)["needs_confirmation"] is True
     monkeypatch.setattr(sys, "argv", ["ai_investigator.py", "--investigate", iid, "--confirm-cloud"])
     assert ai.main() == 0 and json.loads(capsys.readouterr().out)["result"]["verdict"] == "suspicious"
+
+
+# ================================================================ model grade
+def test_local_runs_record_whether_the_model_was_graded(sandbox):
+    import ai_eval
+
+    iid = make_incident(sandbox)
+
+    def Local():  # noqa: N802
+        be = FakeBackend(GOOD)
+        be.name, be.model = "ollama", "tiny:3b"
+        return be
+
+    run = ai.investigate(iid, backend=Local())
+    assert run["model_grade"]["state"] == "ungraded"
+    ai_eval.save({"model": "tiny:3b", "hash": ai_eval.scenario_hash(), "grade": "Use with caution", "score": 0.7, "critical": 0.8, "results": [], "reasons": ["x"], "time": 1})
+    run = ai.investigate(iid, backend=Local())
+    assert run["model_grade"]["state"] == "graded" and run["model_grade"]["grade"] == "Use with caution"
+
+
+def test_cloud_and_fake_backends_are_not_graded_by_us(sandbox):
+    iid = make_incident(sandbox)
+    assert ai.investigate(iid, backend=FakeBackend(GOOD))["model_grade"] is None
+    assert ai.investigate(iid, backend=FakeBackend(GOOD, cloud=True), confirmed=True)["model_grade"] is None
+
+
+def test_status_reports_the_grade_of_the_chosen_local_model(sandbox):
+    assert ai.status()["model_grade"] is None
+    cfg = ai.load_config()
+    cfg.update(backend="ollama", ollama_model="qwen2.5:7b")
+    ai.save_config(cfg)
+    assert ai.status()["model_grade"] == {"state": "ungraded", "model": "qwen2.5:7b"}
