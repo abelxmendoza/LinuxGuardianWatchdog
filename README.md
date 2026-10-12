@@ -58,6 +58,8 @@ LinuxGuardianWatchdog/
 │   ├── rkhunter_baseline.py     # Checks warned files against their packages before a baseline refresh
 │   ├── app_manifest.py          # Export/plan app lists for moving to another laptop
 │   ├── sensors.py               # Blue-team sensors (logins, processes, network, startup entries, accounts, USB)
+│   ├── ai_investigator.py       # Opt-in AI that explains incidents (redacted, validated, advisory only)
+│   ├── ai_safety.py             # Redaction + the read-only command allow-list around the AI
 │   ├── incidents.py             # Groups sensor events into explained incidents
 │   ├── evidence.py              # Read-only evidence bundle for an incident
 │   ├── hardening.py             # Hardening checklist with previewed, undoable fixes
@@ -109,6 +111,7 @@ cd LinuxGuardianSuite
 ./linux_watchdog.sh --init                 # file integrity: Documents + start-up locations (ssh, autostart, shell files)
 ./timeline.py --min-severity warning       # the security timeline from the terminal
 ./sensors.py --run                         # blue team: look for attacks in progress (the timer runs this every 5 minutes)
+./ai_investigator.py --status               # optional AI investigator (off by default; local Ollama or Claude)
 ./incidents.py                             # related events grouped into plain-language incidents
 ./evidence.py --incident ID                # read-only evidence bundle for an incident
 ./hardening.py --check                     # hardening checklist: what's weak, why, and the fix (no root)

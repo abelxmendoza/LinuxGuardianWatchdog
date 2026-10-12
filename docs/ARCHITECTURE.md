@@ -142,8 +142,34 @@ notes and integrity changes alone never become incidents. `evidence.py` collects
 connections, logins, startup entries, program paths/owners/hashes) into a mode-700 folder, never reading process
 environments or your documents. Detection stays separate from remediation: nothing here stops, blocks or deletes.
 
-An AI investigator can later sit on top of exactly this structure (incident + evidence in, explanation out), read-only,
-local-first, with every suggestion shown for your approval; it is deliberately not part of detection.
+## AI investigator
+
+Opt-in, advisory, and unable to act. `ai_investigator.py` turns an incident plus its evidence into a redacted dossier, shows you
+exactly what would be sent, asks a model (local Ollama, or Claude through Anthropic's official SDK), and validates the reply
+before you see it. It is deliberately not part of detection: sensors detect, the AI explains.
+
+The threat model is that evidence is attacker-influenced text (process names, command lines, log lines, usernames), so a
+hostile string can try to talk to the AI. Defences, in layers, each tested:
+
+1. **Redaction first** (`ai_safety.redact`): secrets and private keys, your username, hostname, home path, emails and MAC
+   addresses are removed before the preview and before sending; "strict" also generalises public IPs and flattens paths.
+2. **Nothing leaves without your click.** The preview shows the exact JSON. Cloud requests need explicit confirmation every
+   time (`NeedsConfirmation`); the CLI exits with code 4 until `--confirm-cloud`.
+3. **Evidence is data, not instructions.** It travels as one JSON value behind a random nonce the attacker can't guess, and the
+   system prompt says to treat instructions found in evidence as a sign of attack (`injection_suspected`).
+4. **The model's reply is untrusted too.** Strict schema (structured outputs for Claude, `format` for Ollama), then
+   `validate_result`: unknown fields dropped, enums and lengths enforced, every suggested command classified.
+5. **No path to act.** The module imports no subprocess, kill, acknowledge or allow-list code (a static test asserts it). Only a
+   short allow-list of read-only commands (`ai_safety.check_command`) can get a Run button, only on your click, with no shell,
+   no sudo, a minimal environment, a timeout, and redacted, capped output. Secrets paths (`environ`, `.ssh`, `.aws`, ...) are denied.
+6. **The AI never overrules the sensors.** If it calls something harmless while the sensors rate it warning/critical, the UI says
+   they disagree and the sensors' rating stands. It can't mark anything reviewed.
+7. **Auditable.** Every request and reply is saved mode 600 in `~/.linuxguardian/ai_log/`, including the exact text sent.
+
+An adversarial test feeds five classic injections and a "model" that obeys every one of them; nothing hostile becomes runnable,
+nothing is silenced or allow-listed, and nothing executes after the model answers. Claude calls follow the official SDK: default
+model `claude-opus-5-5`, JSON-schema structured output, no tools, no sampling parameters, and the server-side `fallbacks` beta
+requested by default with automatic degradation to a plain request if the beta isn't accepted.
 
 ## Activity view
 

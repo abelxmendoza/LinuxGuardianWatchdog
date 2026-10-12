@@ -18,6 +18,7 @@ from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite di
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
 from linuxguardian_ui.components import page_header, section_header  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
+from linuxguardian_ui.pages.ai_dialogs import AiSettingsWindow, InvestigationWindow  # noqa: E402
 from linuxguardian_ui.pages.timeline import TimelinePage  # noqa: E402
 from linuxguardian_ui.scripts import run_sync_async  # noqa: E402
 
@@ -112,6 +113,9 @@ class IncidentsView(Gtk.Box):
         check = Gtk.Button(label="Check now")
         check.connect("clicked", self._on_check_now)
         head.append(check)
+        ai_settings = Gtk.Button(label="AI settings")
+        ai_settings.connect("clicked", lambda _b: AiSettingsWindow(self.get_root(), self._toast_overlay).present())
+        head.append(ai_settings)
         if not timer_on:
             turn_on = Gtk.Button(label="Turn on live monitoring")
             turn_on.add_css_class("suggested-action")
@@ -206,6 +210,11 @@ class IncidentsView(Gtk.Box):
 
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, margin_top=4)
         card.append(row)
+        ai_btn = Gtk.Button(label="Investigate with AI…")
+        ai_btn.add_css_class("suggested-action")
+        ai_btn.set_tooltip_text("An optional assistant reads the redacted evidence and explains what it thinks. You see what is sent first; it can only suggest.")
+        ai_btn.connect("clicked", lambda _b, i=inc: InvestigationWindow(self.get_root(), i, self._toast_overlay).present())
+        row.append(ai_btn)
         ev = Gtk.Button(label="Collect evidence")
         ev.set_tooltip_text("Saves a read-only snapshot (processes, connections, logins, startup entries, program hashes) to a private folder.")
         ev.connect("clicked", lambda _b, i=inc: self._collect(i))

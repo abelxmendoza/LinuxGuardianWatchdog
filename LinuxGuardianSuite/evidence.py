@@ -73,25 +73,23 @@ def write(d: Path, name: str, text: str) -> None:
     os.chmod(p, 0o600)
 
 
-def collect(inc: incidents.Incident, out_dir: Path | None = None) -> Path:
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    d = out_dir or (lg_home() / "evidence" / f"{inc.id}-{stamp}")
-    d.mkdir(parents=True, exist_ok=True)
-    os.chmod(d, 0o700)
-    write(d, "00-incident.txt", incidents.narrative(inc) + "\n")
-    write(d, "01-processes.txt", sensors.redact_args(run(["ps", "-eo", "pid,ppid,user,etime,args", "--forest"])))
-    write(d, "02-network.txt", sensors.redact_args(run(["ss", "-tunap"])))
-    write(d, "03-logins.txt", run(["last", "-n", "25", "-F"]) + "\n--- who ---\n" + run(["who"]))
+def sections(inc: incidents.Incident) -> dict[str, str]:
+    """The evidence as {file name: text}. Pure collection, nothing is written, so other readers (the AI investigator)
+    see exactly the same facts the saved bundle contains."""
+    out: dict[str, str] = {"00-incident.txt": incidents.narrative(inc) + "\n"}
+    out["01-processes.txt"] = sensors.redact_args(run(["ps", "-eo", "pid,ppid,user,etime,args", "--forest"]))
+    out["02-network.txt"] = sensors.redact_args(run(["ss", "-tunap"]))
+    out["03-logins.txt"] = run(["last", "-n", "25", "-F"]) + "\n--- who ---\n" + run(["who"])
     auth = Path(os.environ.get("LG_AUTH_LOG", "/var/log/auth.log"))
     needles = [e for e in inc.entities if len(e) > 2]
     try:
         lines = auth.read_text(errors="replace").splitlines()[-4000:]
         pick = [sensors.redact_args(l) for l in lines if any(n in l for n in needles)] or [sensors.redact_args(l) for l in lines[-60:]]
-        write(d, "04-auth-log-excerpt.txt", "\n".join(pick[-200:]) + "\n")
+        out["04-auth-log-excerpt.txt"] = "\n".join(pick[-200:]) + "\n"
     except OSError:
-        write(d, "04-auth-log-excerpt.txt", "(auth log not readable: join the 'adm' group)\n")
+        out["04-auth-log-excerpt.txt"] = "(auth log not readable: join the 'adm' group)\n"
     snap = sensors.autorun_files()
-    write(d, "05-startup-entries.txt", "\n".join(f"{v or '-':16}  {k}" for k, v in sorted(snap.items())) + "\n")
+    out["05-startup-entries.txt"] = "\n".join(f"{v or '-':16}  {k}" for k, v in sorted(snap.items())) + "\n"
     parts = []
     for exe in inc.exes:
         owner = sensors.package_owner(exe)
@@ -104,8 +102,18 @@ def collect(inc: incidents.Incident, out_dir: Path | None = None) -> Path:
     for pid in inc.pids:
         chain = parent_chain(pid)
         parts.append(f"pid {pid}: " + (" <- ".join(chain) if chain else "(no longer running)"))
-    write(d, "06-implicated-programs.txt", "\n\n".join(parts) + "\n" if parts else "(no specific program was involved)\n")
-    write(d, "07-user-services.txt", run(["systemctl", "--user", "list-units", "--type=service", "--state=running", "--no-pager"]))
+    out["06-implicated-programs.txt"] = "\n\n".join(parts) + "\n" if parts else "(no specific program was involved)\n"
+    out["07-user-services.txt"] = run(["systemctl", "--user", "list-units", "--type=service", "--state=running", "--no-pager"])
+    return out
+
+
+def collect(inc: incidents.Incident, out_dir: Path | None = None) -> Path:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    d = out_dir or (lg_home() / "evidence" / f"{inc.id}-{stamp}")
+    d.mkdir(parents=True, exist_ok=True)
+    os.chmod(d, 0o700)
+    for name, text in sections(inc).items():
+        write(d, name, text)
     write(d, "README.txt", "Read-only evidence bundle made by LinuxGuardian Watchdog. Nothing here was changed on your system.\n"
                            "Command lines are scrubbed of tokens and passwords; process environments and your documents are never collected.\n")
     return d

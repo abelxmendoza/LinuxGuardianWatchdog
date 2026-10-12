@@ -51,8 +51,9 @@ macOS original's feature set:
 - [x] Blue team phase 1: live sensors (logins, processes, network, startup entries, accounts, USB, dropped executables),
       incidents with plain-language stories and next steps, one-click read-only evidence bundles, allow-listing
 - [ ] Blue team phase 2: more sensors (journald, browser-extension/npm/pip install watchers, DNS anomalies, ptrace/inject)
-- [ ] Blue team phase 3: opt-in AI investigator on top of incident + evidence (local model first, redacted, read-only,
-      every suggestion shown for approval; never auto-remediates; treats log text as untrusted input)
+- [x] Blue team phase 3: opt-in AI investigator on top of incident + evidence (local Ollama or Claude via the official SDK;
+      redacted, previewed, validated, read-only checks only, never overrules the sensors, fully audited)
+- [ ] AI: optional daily triage digest (ranks open incidents), project-aware context (which ROS nodes you run), local-model eval set
 - [ ] Hardening: backup check (is there a recent snapshot?), outbound connection visibility, DNS-over-TLS toggle
 - [ ] ROS firewall: Tailscale preset, and `ufw allow in proto igmp` as an explained one-click
 - [ ] Real integration tests for the privileged paths (apt, apt-mark, unattended-upgrade) inside a
