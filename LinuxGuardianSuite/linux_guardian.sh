@@ -346,8 +346,8 @@ do_scan() {
         lg_warn "Rootkit check cancelled: the password prompt was dismissed. Nothing was run."
       else
         local rk_total rk_changed
-        rk_total="$(grep -cE '^[[:space:]]*Warning:' "$rk_report" 2>/dev/null || true)"
-        rk_changed="$(grep -ciE '^[[:space:]]*Warning: The file properties have changed' "$rk_report" 2>/dev/null || true)"
+        # One source of truth for counting (it understands rkhunter's console format: "[ Warning ]" lines and the summary totals).
+        read -r rk_total rk_changed < <(python3 "$SCRIPT_DIR/scan_store.py" rk-counts --log "$rk_report" 2>/dev/null || echo "0 0")
         if [ "${rk_total:-0}" -gt 0 ] || grep -qiE 'one or more warnings' "$rk_report" 2>/dev/null; then
           lg_warn "rkhunter reported ${rk_total:-some} warning(s). See $rk_report"
           lg_record_incident "rootkit" "warning" "rkhunter reported warnings, see $rk_report"

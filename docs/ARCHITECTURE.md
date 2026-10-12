@@ -119,6 +119,19 @@ tested to hold on its own. Import refuses on a different release or CPU, skips h
 or key (third-party apps are listed with the repo they need), never removes (`apt-get install --no-remove`),
 and installs classic (unconfined) snaps only when explicitly included.
 
+## Activity view
+
+Scripts print terminal text; the Dashboard shows it as plain-language CARDS instead. `activity.py` (pure Python, no GTK)
+reads the lines as they stream and keeps a structured picture: a verdict sentence, one card per step (Malware scan,
+Rootkit check, Security audit, File integrity, Virus definitions), and GROUPS inside a card with an explanation, for example
+"System programs that differ from rkhunter's saved copy (81)": why that is expected after updates and how to confirm it.
+rkhunter's unusual warnings (shared memory, /dev, hidden files, account-file changes) each get a sentence, and anything
+that looks like a real compromise sign is never softened. It is tested against REAL output from this machine
+(`tests/fixtures/*.txt`), including a scan with 86 rkhunter warnings. The raw lines are still available under
+"Technical details". Lessons from that real run are fixed at the source: the scan used to report "0 warnings" because it
+counted a log format rkhunter doesn't print on the console, and the baseline check treated core tools as unowned because
+Ubuntu's `/bin` -> `/usr/bin` merge hides them from `dpkg -S` (symlinks such as `/usr/bin/mail` are now judged by their target).
+
 ## Hardening, VPN status and diagnostics
 
 `hardening.py` is a checklist. Each check reads the machine without root and returns a state

@@ -1,0 +1,9 @@
+LG_PROGRESS|phase=integrity|message=Hashing files for comparison|pct=0|total=2
+LG_PROGRESS|phase=integrity|message=Hashed 1 of 2 files|done=1|total=2|pct=50|elapsed_sec=0
+[WARN] Modified files: 1
+    /home/user/d/a.txt
+[WARN] Missing files (in the baseline, gone now): 1
+    /home/user/d/b.txt
+[WARN] New files in start-up/persistence locations: 1
+    /home/user/d/c.txt
+LG_PROGRESS|phase=integrity|message=Integrity check complete|pct=100|total=2

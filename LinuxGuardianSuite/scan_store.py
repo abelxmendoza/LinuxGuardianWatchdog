@@ -211,9 +211,14 @@ def main() -> int:
                       help="what the shell knows about the rootkit check (wins over guessing from the log)")
     save.add_argument("--excludes", default="")
     sub.add_parser("last", help="Print last.json as JSON")
+    rk = sub.add_parser("rk-counts", help="Print 'TOTAL CHANGED_FILES' warning counts from an rkhunter log")
+    rk.add_argument("--log", type=Path, required=True)
     sub.add_parser("import-latest", help="Import the newest complete clamscan log")
     args = parser.parse_args()
 
+    if args.cmd == "rk-counts":
+        print(rkhunter_warning_count(args.log), rkhunter_property_change_count(args.log))
+        return 0
     if args.cmd == "last":
         data = load_last()
         if not data:

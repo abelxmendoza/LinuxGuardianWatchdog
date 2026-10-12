@@ -311,3 +311,27 @@ check:checked, radio:checked { background-color: @omega_violet; border-color: @o
 /* Eight tabs: keep the switcher compact so it fits beside the brand and window buttons. */
 viewswitcher button { padding-left: 6px; padding-right: 6px; min-width: 0; }
 viewswitcher button label { font-size: 12px; }
+
+/* ── Activity: plain-language results instead of terminal output ──────────────────────────── */
+.activity-banner { border-radius: 12px; padding: 12px 16px; border: 1px solid alpha(@omega_text_dim, 0.25); }
+.activity-banner.activity-ok { background-image: linear-gradient(120deg, alpha(@omega_violet, 0.28), alpha(@omega_violet, 0.08)); border-color: alpha(@omega_violet, 0.6); }
+.activity-banner.activity-warn { background-color: alpha(@omega_yellow, 0.12); border-color: alpha(@omega_yellow, 0.5); }
+.activity-banner.activity-fail { background-color: alpha(@omega_red, 0.15); border-color: alpha(@omega_red, 0.6); }
+.activity-banner.activity-info, .activity-banner.activity-running { background-color: alpha(@omega_text_dim, 0.08); }
+.activity-headline { font-weight: 700; font-size: 15px; }
+.activity-card { background-color: @omega_bg_raised; border: 1px solid @omega_border; border-left: 4px solid alpha(@omega_text_dim, 0.5); border-radius: 12px; padding: 12px 14px; }
+.activity-card.activity-ok { border-left-color: @omega_violet; }
+.activity-card.activity-warn { border-left-color: @omega_yellow; }
+.activity-card.activity-fail { border-left-color: @omega_red; }
+.activity-card.activity-running { border-left-color: @omega_orange; }
+.activity-title { font-weight: 800; font-size: 14px; }
+.activity-chip { border-radius: 10px; padding: 1px 10px; font-size: 11px; font-weight: 700; background-color: alpha(@omega_text_dim, 0.18); }
+.activity-chip-ok { background-color: alpha(@omega_violet, 0.3); color: #e6d2ff; }
+.activity-chip-warn { background-color: alpha(@omega_yellow, 0.2); color: @omega_yellow; }
+.activity-chip-fail { background-color: alpha(@omega_red, 0.25); color: @omega_red; }
+.activity-chip-running { background-color: alpha(@omega_orange, 0.22); color: @omega_orange; }
+.activity-mark-ok { color: @omega_purple; font-weight: 800; }
+.activity-mark-warn { color: @omega_yellow; font-weight: 800; }
+.activity-mark-fail { color: @omega_red; font-weight: 800; }
+.activity-mark-info { color: @omega_text_dim; }
+.activity-group-title { font-weight: 700; }

@@ -118,3 +118,57 @@ def test_log_style_warnings_are_understood_too(tmp_path, dpkg):
     p = tmp_path / "rk.log"
     p.write_text(text)
     assert rb.analyze(p)["safe_to_refresh"]
+
+
+# ---- real-world findings from a first real scan on Ubuntu 22.04 ---------------------------------------
+def test_usrmerge_dpkg_knows_bin_not_usr_bin(tmp_path, dpkg):
+    """Real bug: dpkg -S /usr/bin/cat finds nothing (the package registered /bin/cat), so every core tool looked 'unowned'."""
+    stub = tmp_path / "bin" / "dpkg"
+    stub.write_text('''#!/usr/bin/env python3
+import os, sys
+a = sys.argv[1:]
+if a[0] == "-S":
+    known = {"/bin/cat": "coreutils", "/bin/ls": "coreutils"}
+    for p in a[2:]:
+        print(f"{known[p]}: {p}") if p in known else print(f"dpkg-query: no path found matching pattern {p}", file=sys.stderr)
+elif a[0] == "--verify":
+    for p in os.environ.get("MODIFIED", "").split(";"):
+        if p: print(f"??5??????   {p}")
+''')
+    r = rb.analyze(log(tmp_path, ["/usr/bin/cat", "/usr/bin/ls"]))
+    assert r["safe_to_refresh"] and r["explained"] == 2
+
+
+def test_usrmerge_aliases():
+    assert rb.aliases("/usr/bin/cat") == ["/usr/bin/cat", "/bin/cat"]
+    assert rb.aliases("/usr/sbin/ip") == ["/usr/sbin/ip", "/sbin/ip"]
+    assert rb.aliases("/opt/x") == ["/opt/x"]
+
+
+def test_a_modified_file_is_caught_under_either_spelling(tmp_path, dpkg):
+    dpkg.setenv("OWNERS", "/bin/cat=coreutils")                 # the fake dpkg only knows this spelling for -S...
+    stub = tmp_path / "bin" / "dpkg"
+    stub.write_text(stub.read_text().replace('owners = dict(x.split("=") for x in os.environ.get("OWNERS", "").split(";") if x)', 'owners = dict(x.split("=") for x in os.environ.get("OWNERS", "").split(";") if x)'))
+    dpkg.setenv("MODIFIED", "/bin/cat")                         # ...and verify reports the old spelling too
+    r = rb.analyze(log(tmp_path, ["/usr/bin/cat"]))
+    assert not r["safe_to_refresh"] and r["unexplained"] == 1
+
+
+def test_symlinks_are_judged_by_what_they_point_to(tmp_path, dpkg):
+    target = tmp_path / "real-mailx"
+    target.write_text("x")
+    link = tmp_path / "mail"
+    link.symlink_to(target)
+    dpkg.setenv("OWNERS", f"{target}=bsd-mailx")
+    r = rb.analyze(log(tmp_path, [str(link)]))
+    row = r["files"][0]
+    assert r["safe_to_refresh"] and row["package"] == "bsd-mailx" and "a link to" in row["why"]
+
+
+def test_a_symlink_to_something_no_package_owns_still_blocks(tmp_path, dpkg):
+    target = tmp_path / "implant"
+    target.write_text("x")
+    link = tmp_path / "ls"
+    link.symlink_to(target)
+    r = rb.analyze(log(tmp_path, [str(link)]))
+    assert not r["safe_to_refresh"] and "a link to" in r["files"][0]["why"]

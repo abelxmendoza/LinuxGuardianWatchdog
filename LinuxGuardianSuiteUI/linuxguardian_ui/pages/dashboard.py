@@ -14,6 +14,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
+from linuxguardian_ui.activity import Activity
+from linuxguardian_ui.activity_view import ActivityView
 from linuxguardian_ui.components import page_header, section_header
 from linuxguardian_ui.dialogs import confirm, review
 
@@ -42,15 +44,21 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 class DashboardPage(Gtk.Box):
     def __init__(self) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.set_margin_top(24)
-        self.set_margin_bottom(24)
-        self.set_margin_start(24)
-        self.set_margin_end(24)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        # The whole page scrolls, so the Activity cards below get the room they need instead of a squeezed strip.
+        page_scroller = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        page_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        Gtk.Box.append(self, page_scroller)
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        body.set_margin_top(24)
+        body.set_margin_bottom(24)
+        body.set_margin_start(24)
+        body.set_margin_end(24)
+        page_scroller.set_child(body)
 
-        self.append(page_header("Security dashboard", "Scan, inspect, and maintain your Linux desktop.", "security-high-symbolic", logo=True))
+        body.append(page_header("Security dashboard", "Scan, inspect, and maintain your Linux desktop.", "security-high-symbolic", logo=True))
         overview = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, homogeneous=True)
-        self.append(overview)
+        body.append(overview)
 
         score_card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
         score_card.add_css_class("omega-card")
@@ -98,13 +106,13 @@ class DashboardPage(Gtk.Box):
         self.last_scan_detail.add_css_class("omega-dim")
         last_card.append(self.last_scan_detail)
 
-        self.append(section_header("Scanner health"))
+        body.append(section_header("Scanner health"))
         self.health_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.health_card.add_css_class("omega-card")
         self.health_card.set_margin_start(10)
         self.health_card.set_margin_end(10)
         self.health_card.append(Gtk.Label(label="Checking scanner health…", xalign=0))
-        self.append(self.health_card)
+        body.append(self.health_card)
 
         hard_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         hard_card.add_css_class("omega-card")
@@ -131,8 +139,8 @@ class DashboardPage(Gtk.Box):
 
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         actions.add_css_class("process-toolbar")
-        self.append(section_header("Quick actions"))
-        self.append(actions)
+        body.append(section_header("Quick actions"))
+        body.append(actions)
 
         self.scan_btn = Gtk.Button(label="Run Malware/Rootkit Scan")
         self.scan_btn.add_css_class("suggested-action")
@@ -164,7 +172,7 @@ class DashboardPage(Gtk.Box):
         actions.append(self.spinner)
 
         scan_opts = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        self.append(scan_opts)
+        body.append(scan_opts)
 
         self.full_check = Gtk.CheckButton(label="Include developer tools and build caches")
         self.full_check.set_tooltip_text("Adds SDKs, compiler caches, and git objects to the scan — takes longer but is more thorough")
@@ -188,7 +196,7 @@ class DashboardPage(Gtk.Box):
         self.progress_card.set_margin_start(0)
         self.progress_card.set_margin_end(0)
         self.progress_card.set_visible(False)
-        self.append(self.progress_card)
+        body.append(self.progress_card)
 
         heading_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.progress_card.append(heading_row)
@@ -223,14 +231,24 @@ class DashboardPage(Gtk.Box):
         self.current_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         self.progress_card.append(self.current_label)
 
-        self.append(section_header("Activity output"))
-        scroller = Gtk.ScrolledWindow(vexpand=True)
-        self.append(scroller)
+        body.append(section_header("Activity"))
+        self.activity_view = ActivityView()
+        self.activity_view.empty_text = "Nothing has run yet. Use a button above: results show up here as plain-language cards."
+        self.activity_view.on_action = self._on_activity_action
+        body.append(self.activity_view)
+        self._activity = Activity()
+        self._activity_dirty = False
+        self._activity_tick = 0
 
+        # The raw terminal output is still here, for anyone who wants it, but it no longer IS the interface.
+        tech = Gtk.Expander(label="Technical details (raw output)")
+        body.append(tech)
+        raw_scroller = Gtk.ScrolledWindow(min_content_height=160)
+        tech.set_child(raw_scroller)
         self.output_view = Gtk.TextView(editable=False, monospace=True)
         self.output_view.add_css_class("omega-card")
         self.output_view.set_wrap_mode(Gtk.WrapMode.CHAR)
-        scroller.set_child(self.output_view)
+        raw_scroller.set_child(self.output_view)
         self.buffer = self.output_view.get_buffer()
         self._end_mark = self.buffer.create_mark("tail", self.buffer.get_end_iter(), False)
 
@@ -283,14 +301,29 @@ class DashboardPage(Gtk.Box):
             if self._tick_id:
                 GLib.source_remove(self._tick_id)
             self._tick_id = GLib.timeout_add(250, self._on_tick)
+            if self._activity_tick:
+                GLib.source_remove(self._activity_tick)
+            self._activity_tick = GLib.timeout_add(400, self._flush_activity)
             self._set_window_title(f"{label} running")
         else:
             self.spinner.stop()
             self.progress_spinner.stop()
+            self._activity_dirty = True
             if self._tick_id:
                 GLib.source_remove(self._tick_id)
                 self._tick_id = 0
             self._set_window_title(None)
+
+    def _flush_activity(self) -> bool:
+        """Re-draw the activity cards at most a few times a second, however fast the script prints."""
+        if self._activity_dirty:
+            self._activity_dirty = False
+            self.activity_view.render(self._activity)
+        return self._busy
+
+    def _on_activity_action(self, name: str) -> None:
+        if name == "review_baseline":
+            self._on_review_baseline(None)
 
     def _on_tick(self) -> bool:
         if not self._busy:
@@ -345,6 +378,8 @@ class DashboardPage(Gtk.Box):
         if is_progress_noise(line):
             return False
         self._current_lines.append(line)
+        self._activity.feed(line)
+        self._activity_dirty = True
         end = self.buffer.get_end_iter()
         self.buffer.insert(end, line + "\n")
         self.buffer.move_mark(self._end_mark, self.buffer.get_end_iter())
@@ -354,6 +389,9 @@ class DashboardPage(Gtk.Box):
     def _clear(self) -> None:
         self._current_lines = []
         self.buffer.set_text("")
+        self._activity = Activity()
+        self._activity_dirty = True
+        self._flush_activity()
 
     def _set_remaining_color(self, css: str) -> None:
         for cls in ("omega-dim", "omega-warning", "omega-heading"):
@@ -455,7 +493,10 @@ class DashboardPage(Gtk.Box):
                 self._append_line(f"\n[{label} stopped]")
             else:
                 self._append_line(f"\n[{label} finished, exit code {code}]")
+            self._activity.finish(code)
+            self._activity_dirty = True
             self._set_busy(False, label)
+            self._flush_activity()
             self._finish_progress(code, label)
             self._cancel = None
             if label == "Security audit" and code == 0:

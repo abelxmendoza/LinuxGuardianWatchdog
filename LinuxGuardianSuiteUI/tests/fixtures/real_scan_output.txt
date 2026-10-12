@@ -1,0 +1,342 @@
+$ linux_guardian.sh --scan --full --changed --rootkit
+[INFO] Malware/rootkit scan of /home/user started (full, changed-only).
+[INFO] Elapsed time updates every second so you can see it is still running.
+[INFO] Tip: install clamav-daemon and run clamd for faster scans (virus DB stays in memory).
+[INFO] Step 1 of 2 — ClamAV via clamscan.
+[INFO] Changed-only: 22 file(s) newer than the last scan.
+
+----------- SCAN SUMMARY -----------
+Known viruses: 3628164
+Engine version: 1.5.4
+Scanned directories: 0
+Scanned files: 21
+Infected files: 0
+Data scanned: 1.45 MiB
+Data read: 2.90 MiB (ratio 0.50:1)
+Time: 4.663 sec (0 m 4 s)
+Start Date: 2026:10:12 14:35:18
+End Date:   2026:10:12 14:35:23
+[ OK ] ClamAV: no infections found.
+[INFO] Step 2 of 2 — rkhunter rootkit scan.
+[INFO] rkhunter needs root: approve the password prompt if one appears. The prompt belongs to your desktop; this app never sees the password.
+[ Rootkit Hunter version 1.4.6 ]
+
+Checking system commands...
+
+  Performing 'strings' command checks
+    Checking 'strings' command                               [ OK ]
+
+  Performing 'shared libraries' checks
+    Checking for preloading variables                        [ None found ]
+    Checking for preloaded libraries                         [ None found ]
+    Checking LD_LIBRARY_PATH variable                        [ Not found ]
+
+  Performing file properties checks
+    Checking for prerequisites                               [ OK ]
+    /usr/sbin/adduser                                        [ OK ]
+    /usr/sbin/chroot                                         [ Warning ]
+    /usr/sbin/cron                                           [ OK ]
+    /usr/sbin/depmod                                         [ Warning ]
+    /usr/sbin/fsck                                           [ Warning ]
+    /usr/sbin/groupadd                                       [ OK ]
+    /usr/sbin/groupdel                                       [ OK ]
+    /usr/sbin/groupmod                                       [ OK ]
+    /usr/sbin/grpck                                          [ OK ]
+    /usr/sbin/ifconfig                                       [ OK ]
+    /usr/sbin/init                                           [ Warning ]
+    /usr/sbin/insmod                                         [ Warning ]
+    /usr/sbin/ip                                             [ Warning ]
+    /usr/sbin/lsmod                                          [ Warning ]
+    /usr/sbin/modinfo                                        [ Warning ]
+    /usr/sbin/modprobe                                       [ Warning ]
+    /usr/sbin/nologin                                        [ OK ]
+    /usr/sbin/pwck                                           [ OK ]
+    /usr/sbin/rmmod                                          [ Warning ]
+    /usr/sbin/route                                          [ OK ]
+    /usr/sbin/rsyslogd                                       [ Warning ]
+    /usr/sbin/runlevel                                       [ Warning ]
+    /usr/sbin/sulogin                                        [ Warning ]
+    /usr/sbin/sysctl                                         [ OK ]
+    /usr/sbin/useradd                                        [ OK ]
+    /usr/sbin/userdel                                        [ OK ]
+    /usr/sbin/usermod                                        [ OK ]
+    /usr/sbin/vipw                                           [ OK ]
+    /usr/sbin/unhide                                         [ OK ]
+    /usr/sbin/unhide-linux                                   [ OK ]
+    /usr/sbin/unhide-posix                                   [ OK ]
+    /usr/sbin/unhide-tcp                                     [ OK ]
+    /usr/bin/awk                                             [ OK ]
+    /usr/bin/basename                                        [ Warning ]
+    /usr/bin/bash                                            [ OK ]
+    /usr/bin/cat                                             [ Warning ]
+    /usr/bin/chattr                                          [ OK ]
+    /usr/bin/chmod                                           [ Warning ]
+    /usr/bin/chown                                           [ Warning ]
+    /usr/bin/cp                                              [ Warning ]
+    /usr/bin/curl                                            [ Warning ]
+    /usr/bin/cut                                             [ Warning ]
+    /usr/bin/date                                            [ Warning ]
+    /usr/bin/df                                              [ Warning ]
+    /usr/bin/diff                                            [ Warning ]
+    /usr/bin/dirname                                         [ Warning ]
+[INFO] rkhunter rootkit checks (approve the password prompt if shown) — 15s elapsed, still running (not frozen)
+    /usr/bin/dmesg                                           [ Warning ]
+    /usr/bin/dpkg                                            [ OK ]
+    /usr/bin/dpkg-query                                      [ OK ]
+    /usr/bin/du                                              [ Warning ]
+    /usr/bin/echo                                            [ Warning ]
+    /usr/bin/ed                                              [ OK ]
+    /usr/bin/egrep                                           [ OK ]
+    /usr/bin/env                                             [ Warning ]
+    /usr/bin/fgrep                                           [ OK ]
+    /usr/bin/file                                            [ OK ]
+    /usr/bin/find                                            [ OK ]
+    /usr/bin/fuser                                           [ OK ]
+    /usr/bin/GET                                             [ Warning ]
+    /usr/bin/grep                                            [ OK ]
+    /usr/bin/groups                                          [ Warning ]
+    /usr/bin/head                                            [ Warning ]
+    /usr/bin/id                                              [ Warning ]
+    /usr/bin/ip                                              [ Warning ]
+    /usr/bin/ipcs                                            [ Warning ]
+    /usr/bin/kill                                            [ OK ]
+    /usr/bin/killall                                         [ OK ]
+    /usr/bin/last                                            [ Warning ]
+    /usr/bin/lastlog                                         [ OK ]
+    /usr/bin/ldd                                             [ Warning ]
+    /usr/bin/less                                            [ OK ]
+    /usr/bin/logger                                          [ Warning ]
+    /usr/bin/login                                           [ OK ]
+    /usr/bin/ls                                              [ Warning ]
+    /usr/bin/lsattr                                          [ OK ]
+    /usr/bin/lsmod                                           [ Warning ]
+    /usr/bin/lsof                                            [ OK ]
+    /usr/bin/mail                                            [ Warning ]
+    /usr/bin/md5sum                                          [ Warning ]
+    /usr/bin/mktemp                                          [ Warning ]
+    /usr/bin/more                                            [ Warning ]
+    /usr/bin/mount                                           [ Warning ]
+    /usr/bin/mv                                              [ Warning ]
+    /usr/bin/netstat                                         [ OK ]
+    /usr/bin/newgrp                                          [ OK ]
+    /usr/bin/passwd                                          [ OK ]
+    /usr/bin/perl                                            [ Warning ]
+    /usr/bin/pgrep                                           [ OK ]
+    /usr/bin/ping                                            [ OK ]
+    /usr/bin/pkill                                           [ OK ]
+    /usr/bin/ps                                              [ OK ]
+    /usr/bin/pstree                                          [ OK ]
+    /usr/bin/pwd                                             [ Warning ]
+    /usr/bin/readlink                                        [ Warning ]
+    /usr/bin/rkhunter                                        [ OK ]
+    /usr/bin/runcon                                          [ Warning ]
+    /usr/bin/sed                                             [ Warning ]
+    /usr/bin/sh                                              [ OK ]
+    /usr/bin/sha1sum                                         [ Warning ]
+    /usr/bin/sha224sum                                       [ Warning ]
+    /usr/bin/sha256sum                                       [ Warning ]
+    /usr/bin/sha384sum                                       [ Warning ]
+    /usr/bin/sha512sum                                       [ Warning ]
+    /usr/bin/size                                            [ OK ]
+    /usr/bin/sort                                            [ Warning ]
+    /usr/bin/ssh                                             [ Warning ]
+    /usr/bin/stat                                            [ Warning ]
+    /usr/bin/strace                                          [ OK ]
+    /usr/bin/strings                                         [ OK ]
+    /usr/bin/su                                              [ Warning ]
+    /usr/bin/sudo                                            [ Warning ]
+    /usr/bin/tail                                            [ Warning ]
+    /usr/bin/telnet                                          [ OK ]
+    /usr/bin/test                                            [ Warning ]
+    /usr/bin/top                                             [ OK ]
+    /usr/bin/touch                                           [ Warning ]
+    /usr/bin/tr                                              [ Warning ]
+    /usr/bin/uname                                           [ Warning ]
+    /usr/bin/uniq                                            [ Warning ]
+    /usr/bin/users                                           [ Warning ]
+    /usr/bin/vmstat                                          [ OK ]
+    /usr/bin/w                                               [ OK ]
+    /usr/bin/watch                                           [ OK ]
+    /usr/bin/wc                                              [ Warning ]
+    /usr/bin/wget                                            [ Warning ]
+[INFO] rkhunter rootkit checks (approve the password prompt if shown) — 30s elapsed, still running (not frozen)
+    /usr/bin/whatis                                          [ OK ]
+    /usr/bin/whereis                                         [ Warning ]
+    /usr/bin/which                                           [ OK ]
+    /usr/bin/who                                             [ Warning ]
+    /usr/bin/whoami                                          [ Warning ]
+    /usr/bin/numfmt                                          [ Warning ]
+    /usr/bin/kmod                                            [ Warning ]
+    /usr/bin/systemd                                         [ Warning ]
+    /usr/bin/systemctl                                       [ Warning ]
+    /usr/bin/mawk                                            [ OK ]
+    /usr/bin/lwp-request                                     [ Warning ]
+    /usr/bin/bsd-mailx                                       [ Warning ]
+    /usr/bin/dash                                            [ OK ]
+    /usr/bin/x86_64-linux-gnu-size                           [ OK ]
+    /usr/bin/x86_64-linux-gnu-strings                        [ OK ]
+    /usr/bin/telnet.netkit                                   [ OK ]
+    /usr/bin/which.debianutils                               [ OK ]
+    /usr/bin/snap                                            [ Warning ]
+    /snap/bin/curl                                           [ Warning ]
+    /usr/lib/systemd/systemd                                 [ Warning ]
+
+Checking for rootkits...
+
+  Performing check of known rootkit files and directories
+    55808 Trojan - Variant A                                 [ Not found ]
+    ADM Worm                                                 [ Not found ]
+    AjaKit Rootkit                                           [ Not found ]
+    Adore Rootkit                                            [ Not found ]
+    aPa Kit                                                  [ Not found ]
+    Apache Worm                                              [ Not found ]
+    Ambient (ark) Rootkit                                    [ Not found ]
+    Balaur Rootkit                                           [ Not found ]
+    BeastKit Rootkit                                         [ Not found ]
+    beX2 Rootkit                                             [ Not found ]
+    BOBKit Rootkit                                           [ Not found ]
+    cb Rootkit                                               [ Not found ]
+    CiNIK Worm (Slapper.B variant)                           [ Not found ]
+    Danny-Boy's Abuse Kit                                    [ Not found ]
+    Devil RootKit                                            [ Not found ]
+    Diamorphine LKM                                          [ Not found ]
+    Dica-Kit Rootkit                                         [ Not found ]
+    Dreams Rootkit                                           [ Not found ]
+    Duarawkz Rootkit                                         [ Not found ]
+    Ebury backdoor                                           [ Not found ]
+    Enye LKM                                                 [ Not found ]
+    Flea Linux Rootkit                                       [ Not found ]
+    Fu Rootkit                                               [ Not found ]
+    Fuck`it Rootkit                                          [ Not found ]
+    GasKit Rootkit                                           [ Not found ]
+    Heroin LKM                                               [ Not found ]
+    HjC Kit                                                  [ Not found ]
+    ignoKit Rootkit                                          [ Not found ]
+    IntoXonia-NG Rootkit                                     [ Not found ]
+    Irix Rootkit                                             [ Not found ]
+    Jynx Rootkit                                             [ Not found ]
+    Jynx2 Rootkit                                            [ Not found ]
+    KBeast Rootkit                                           [ Not found ]
+    Kitko Rootkit                                            [ Not found ]
+    Knark Rootkit                                            [ Not found ]
+    ld-linuxv.so Rootkit                                     [ Not found ]
+    Li0n Worm                                                [ Not found ]
+    Lockit / LJK2 Rootkit                                    [ Not found ]
+    Mokes backdoor                                           [ Not found ]
+    Mood-NT Rootkit                                          [ Not found ]
+    MRK Rootkit                                              [ Not found ]
+    Ni0 Rootkit                                              [ Not found ]
+    Ohhara Rootkit                                           [ Not found ]
+    Optic Kit (Tux) Worm                                     [ Not found ]
+    Oz Rootkit                                               [ Not found ]
+    Phalanx Rootkit                                          [ Not found ]
+    Phalanx2 Rootkit                                         [ Not found ]
+[INFO] rkhunter rootkit checks (approve the password prompt if shown) — 45s elapsed, still running (not frozen)
+    Phalanx2 Rootkit (extended tests)                        [ Not found ]
+    Portacelo Rootkit                                        [ Not found ]
+    R3dstorm Toolkit                                         [ Not found ]
+    RH-Sharpe's Rootkit                                      [ Not found ]
+    RSHA's Rootkit                                           [ Not found ]
+    Scalper Worm                                             [ Not found ]
+    Sebek LKM                                                [ Not found ]
+    Shutdown Rootkit                                         [ Not found ]
+    SHV4 Rootkit                                             [ Not found ]
+    SHV5 Rootkit                                             [ Not found ]
+    Sin Rootkit                                              [ Not found ]
+    Slapper Worm                                             [ Not found ]
+    Sneakin Rootkit                                          [ Not found ]
+    'Spanish' Rootkit                                        [ Not found ]
+    Suckit Rootkit                                           [ Not found ]
+    Superkit Rootkit                                         [ Not found ]
+    TBD (Telnet BackDoor)                                    [ Not found ]
+    TeLeKiT Rootkit                                          [ Not found ]
+    T0rn Rootkit                                             [ Not found ]
+    trNkit Rootkit                                           [ Not found ]
+    Trojanit Kit                                             [ Not found ]
+    Tuxtendo Rootkit                                         [ Not found ]
+    URK Rootkit                                              [ Not found ]
+    Vampire Rootkit                                          [ Not found ]
+    VcKit Rootkit                                            [ Not found ]
+    Volc Rootkit                                             [ Not found ]
+    Xzibit Rootkit                                           [ Not found ]
+    zaRwT.KiT Rootkit                                        [ Not found ]
+    ZK Rootkit                                               [ Not found ]
+
+  Performing additional rootkit checks
+    Suckit Rootkit additional checks                         [ OK ]
+    Checking for possible rootkit files and directories      [ None found ]
+    Checking for possible rootkit strings                    [ None found ]
+
+  Performing malware checks
+    Checking running processes for suspicious files          [ None found ]
+    Checking for login backdoors                             [ None found ]
+    Checking for sniffer log files                           [ None found ]
+[INFO] rkhunter rootkit checks (approve the password prompt if shown) — 1m 00s elapsed, still running (not frozen)
+    Checking for suspicious directories                      [ None found ]
+    Checking for suspicious (large) shared memory segments   [ Warning ]
+    Checking for Apache backdoor                             [ Not found ]
+
+  Performing Linux specific checks
+    Checking loaded kernel modules                           [ OK ]
+    Checking kernel module names                             [ OK ]
+
+Checking the network...
+
+  Performing checks on the network ports
+    Checking for backdoor ports                              [ None found ]
+
+  Performing checks on the network interfaces
+    Checking for promiscuous interfaces                      [ None found ]
+
+Checking the local host...
+
+  Performing system boot checks
+    Checking for local host name                             [ Found ]
+    Checking for system startup files                        [ Found ]
+    Checking system startup files for malware                [ None found ]
+
+  Performing group and account checks
+    Checking for passwd file                                 [ Found ]
+    Checking for root equivalent (UID 0) accounts            [ None found ]
+    Checking for passwordless accounts                       [ None found ]
+    Checking for passwd file changes                         [ Warning ]
+    Checking for group file changes                          [ Warning ]
+    Checking root account shell history files                [ OK ]
+
+  Performing system configuration file checks
+    Checking for an SSH configuration file                   [ Not found ]
+    Checking for a running system logging daemon             [ Found ]
+    Checking for a system logging configuration file         [ Found ]
+    Checking if syslog remote logging is allowed             [ Not allowed ]
+
+  Performing filesystem checks
+    Checking /dev for suspicious file types                  [ Warning ]
+    Checking for hidden files and directories                [ Warning ]
+
+
+System checks summary
+=====================
+
+File properties checks...
+    Files checked: 145
+    Suspect files: 81
+
+Rootkit checks...
+    Rootkits checked : 480
+    Possible rootkits: 3
+
+Applications checks...
+    All checks skipped
+
+The system checks took: 58 seconds
+
+All results have been written to the log file: /var/log/rkhunter.log
+
+One or more warnings have been found while checking the system.
+Please check the log file (/var/log/rkhunter.log)
+
+[WARN] rkhunter reported 0 warning(s). See /home/user/.linuxguardian/logs/scans/rkhunter-20261012-143512.log
+[INFO] Scan result saved to /home/user/.linuxguardian/scans/last.json
+[ OK ] Malware/rootkit scan complete.
+
+[Malware/rootkit scan finished, exit code 0]

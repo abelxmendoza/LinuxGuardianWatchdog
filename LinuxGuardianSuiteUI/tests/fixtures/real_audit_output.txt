@@ -1,0 +1,17 @@
+LinuxGuardian Security Audit
+================================
+[ OK ] Firewall front-end active (ufw)
+[ OK ] sshd not installed
+[ OK ] Automatic security updates are on (unattended-upgrades, daily)
+Update configuration does not prove recent updates succeeded; review unattended-upgrades logs.
+[ OK ] No pending security updates
+[ OK ] No restart pending from updates
+[ OK ] No risky services reachable from the network
+[ OK ] Virus definitions are current
+[WARN] Rootkit check has not run yet — tick 'Include rootkit check' and run a scan
+[WARN] No LUKS-encrypted volume detected — consider full-disk encryption
+[ OK ] AppArmor enabled
+[WARN] Sudo policy could not be verified without authentication — review sudo -l in a terminal
+================================
+Score: 8 pass, 3 warn, 0 fail (of 11 checks)
+Rating: 86 of 100

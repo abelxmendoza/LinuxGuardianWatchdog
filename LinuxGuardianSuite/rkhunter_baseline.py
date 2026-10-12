@@ -67,16 +67,27 @@ def changed_files(text: str) -> list[str]:
     return list(seen)
 
 
+def aliases(path: str) -> list[str]:
+    """Ubuntu merges /bin into /usr/bin (and /sbin, /lib), but packages record the OLD names: dpkg knows /bin/cat,
+    not /usr/bin/cat. Every spelling a package might have used, the given one first."""
+    out = [path]
+    for merged, old in (("/usr/bin/", "/bin/"), ("/usr/sbin/", "/sbin/"), ("/usr/lib/", "/lib/"), ("/usr/lib64/", "/lib64/")):
+        if path.startswith(merged):
+            out.append(old + path[len(merged):])
+    return out
+
+
 def package_owners(paths: list[str]) -> dict[str, str]:
-    """path -> package, for the paths dpkg knows. Unknown paths are simply absent."""
+    """path -> package, for the paths dpkg knows (under any of their usrmerge spellings). Unknown paths are absent."""
     owners: dict[str, str] = {}
     if not paths:
         return owners
-    _rc, out, _err = _run(["dpkg", "-S", "--", *paths])
+    asked = {a: p for p in paths for a in aliases(p)}
+    _rc, out, _err = _run(["dpkg", "-S", "--", *asked])
     for line in out.splitlines():
         pkgs, sep, path = line.partition(": ")
-        if sep and path in paths:
-            owners[path] = pkgs.split(",")[0].strip().split(":")[0]
+        if sep and path in asked and asked[path] not in owners:
+            owners[asked[path]] = pkgs.split(",")[0].strip().split(":")[0]
     return owners
 
 
@@ -114,19 +125,24 @@ def analyze(log_path: Path | None) -> dict:
         result["reason"] = "rkhunter reported no warnings, so there is nothing to refresh."
         return result
 
-    owners = package_owners(files)
-    modified, complete = modified_paths(list(owners.values()))
+    # A symlink (update-alternatives entries like /usr/bin/mail, snap's /snap/bin/*) isn't owned by a package itself;
+    # what matters is the file it points to. Judge the target, and say so.
+    targets = {f: os.path.realpath(f) for f in files if os.path.islink(f)}
+    owners = package_owners(files + [t for t in targets.values() if t not in files])
+    modified, complete = modified_paths(sorted(set(owners.values())))
     rows = []
     for f in files:
-        pkg = owners.get(f)
+        subject = targets.get(f, f)
+        pkg = owners.get(f) or owners.get(subject)
+        via = f" (a link to {subject})" if f in targets and subject != f else ""
         if pkg is None:
-            rows.append({"path": f, "package": None, "explained": False, "why": "not owned by any installed package"})
-        elif f in modified:
-            rows.append({"path": f, "package": pkg, "explained": False, "why": f"differs from the {pkg} package"})
+            rows.append({"path": f, "package": None, "explained": False, "why": "not owned by any installed package" + via})
+        elif any(a in modified for a in aliases(f) + aliases(subject)):
+            rows.append({"path": f, "package": pkg, "explained": False, "why": f"differs from the {pkg} package" + via})
         elif not complete:
             rows.append({"path": f, "package": pkg, "explained": False, "why": "couldn't verify against its package"})
         else:
-            rows.append({"path": f, "package": pkg, "explained": True, "why": f"matches the {pkg} package"})
+            rows.append({"path": f, "package": pkg, "explained": True, "why": f"matches the {pkg} package" + via})
     explained = sum(r["explained"] for r in rows)
     # Warnings we can't attribute to a specific file: anything beyond the file list.
     other = max(0, total - len(files), suspect - len(files))
