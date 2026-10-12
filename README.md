@@ -57,6 +57,10 @@ LinuxGuardianWatchdog/
 │   ├── notify_events.py         # Desktop notifications for new warnings
 │   ├── rkhunter_baseline.py     # Checks warned files against their packages before a baseline refresh
 │   ├── app_manifest.py          # Export/plan app lists for moving to another laptop
+│   ├── hardening.py             # Hardening checklist with previewed, undoable fixes
+│   ├── linux_hardening.sh       # The hardening fixes that need root (fixed scripts)
+│   ├── vpn_status.py            # Tailscale + Proton VPN status and leak/conflict diagnostics
+│   ├── diagnostics.py           # Feature-by-feature self-check
 │   ├── ros_firewall.py          # ROS 2 domain port math + peer validation for the firewall helper
 │   ├── linux_ros_firewall.sh    # Preview/add/remove narrow ufw rules for a robot
 │   ├── linux_apps.sh            # ...and the installer for them
@@ -101,6 +105,10 @@ cd LinuxGuardianSuite
 ./linux_apps.sh --install apps.json        # ...install the Ubuntu apps and snaps that are available (password via polkit)
 ./linux_watchdog.sh --init                 # file integrity: Documents + start-up locations (ssh, autostart, shell files)
 ./timeline.py --min-severity warning       # the security timeline from the terminal
+./hardening.py --check                     # hardening checklist: what's weak, why, and the fix (no root)
+./linux_hardening.sh --apply sysctl        # the fixes that need a password (sysctl | ufw_ipv6 | ufw_logging); --undo reverses
+./vpn_status.py                            # Tailscale + Proton VPN: connected? leaking? fighting each other?
+./diagnostics.py                           # which features work, and what is missing for the ones that don't
 ./linux_ros_firewall.sh --plan --peer 192.168.1.50 --preset mavlink   # ROS 2 + ufw: preview narrow rules for ONE robot
 ./linux_ros_firewall.sh --apply --peer 192.168.1.50                      # ...add them (one password prompt); --remove undoes them
 ./linux_guardian.sh --enable-auto-update   # turn on ClamAV's background updater (asks first, password via polkit)

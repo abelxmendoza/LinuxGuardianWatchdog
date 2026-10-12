@@ -119,6 +119,34 @@ tested to hold on its own. Import refuses on a different release or CPU, skips h
 or key (third-party apps are listed with the repo they need), never removes (`apt-get install --no-remove`),
 and installs classic (unconfined) snaps only when explicitly included.
 
+## Hardening, VPN status and diagnostics
+
+`hardening.py` is a checklist. Each check reads the machine without root and returns a state
+(ok / attention / info / unknown), a plain-language summary, WHY it matters, and optional fixes. Every fix shows
+what it will change before it runs, records what it replaced in `~/.linuxguardian/state/hardening_undo.json`, and can
+be undone. Fixes that change only your own settings (screen lock, Screen Sharing, file permissions, the daily timer)
+run as you; the three that need root (kernel settings, ufw IPv6, ufw logging) go through `linux_hardening.sh` with
+fixed scripts, allow-listed words and one password prompt. Details worth knowing:
+
+- A failed multi-step fix rolls back; a "limit Screen Sharing to Tailscale" fix verifies the listener really narrowed and
+  reverts itself if it didn't.
+- Kernel settings deliberately skip `rp_filter` (strict mode breaks routing when Tailscale/Proton are up) and
+  `ptrace_scope` (breaks attaching debuggers to your own ROS processes).
+- "Fix the recommended ones" only includes problems with exactly one recommended remedy; choices that depend on how you
+  use the laptop (should Screen Sharing be off, or just locked down?) are left to you.
+- Secret values are never read into the UI: the Screen Sharing check reports that a password is stored in a reversible
+  form but never displays it.
+
+`vpn_status.py` reads tailscale, NetworkManager, `ip` and `resolvectl` and judges the combination: which interface owns the
+default route, whether Tailscale traffic still reaches Tailscale while Proton is up, DNS and IPv6 leaks, a Tailscale
+exit node stacked on another VPN, address-range (CGNAT) overlap, and a Proton kill switch left armed. It sends nothing
+anywhere unless you press "Check my public IP" (one request to Cloudflare's trace page). The Proton heuristics come from
+Proton's own support pages and user reports, not from a published interface contract, so treat them as best-effort.
+
+`diagnostics.py` reports by FEATURE (Rootkit check: unavailable, needs rkhunter) rather than by tool, checks that a polkit
+agent is running so password prompts can appear, that the data directory is writable, and that every script in the install
+still parses.
+
 ## Robot networking (ROS 2 firewall helper)
 
 A default-deny ufw blocks DDS discovery between laptop and robot, and the usual fixes (open a huge range,

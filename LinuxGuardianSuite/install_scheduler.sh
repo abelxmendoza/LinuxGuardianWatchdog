@@ -18,7 +18,7 @@ UNIT_DIR="$HOME/.config/systemd/user"
 SERVICE_NAME="linuxguardian-scan.service"
 TIMER_NAME="linuxguardian-scan.timer"
 
-usage() { grep '^#' "$0" | sed 's/^# \{0,1\}//;1d'; }
+usage() { awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"; }
 
 install_units() {
   mkdir -p "$UNIT_DIR"
@@ -29,8 +29,11 @@ Description=LinuxGuardian daily security scan
 
 [Service]
 Type=oneshot
-ExecStart=$SCRIPT_DIR/linux_guardian.sh --scan %h
-ExecStartPost=$SCRIPT_DIR/linux_watchdog.sh --check
+# Gentle on the battery: low CPU and disk priority, and only files changed since the last scan.
+Nice=10
+IOSchedulingClass=idle
+ExecStart=$SCRIPT_DIR/linux_guardian.sh --scan --changed %h
+ExecStartPost=-$SCRIPT_DIR/linux_watchdog.sh --check
 ExecStartPost=-$SCRIPT_DIR/linux_exposure.sh --record
 ExecStartPost=-$SCRIPT_DIR/linux_security_audit.sh
 ExecStartPost=-$SCRIPT_DIR/notify_events.py --send

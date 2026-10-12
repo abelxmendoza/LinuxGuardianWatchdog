@@ -307,3 +307,7 @@ check:checked, radio:checked { background-color: @omega_violet; border-color: @o
 .update-chip { background-color: alpha(@omega_violet, 0.22); color: @omega_text; border-radius: 10px; padding: 1px 9px; font-size: 11px; font-weight: 700; }
 .update-name { font-weight: 700; font-size: 14px; }
 .update-raw { font-family: monospace; font-size: 11px; color: @omega_text_dim; }
+
+/* Eight tabs: keep the switcher compact so it fits beside the brand and window buttons. */
+viewswitcher button { padding-left: 6px; padding-right: 6px; min-width: 0; }
+viewswitcher button label { font-size: 12px; }

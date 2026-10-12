@@ -44,6 +44,11 @@ macOS original's feature set:
 - [x] Desktop notifications for new warning/critical findings (grouped, never replays history, on/off switch)
 - [x] ROS-aware firewall helper (Exposure tab): narrow ufw rules for ONE robot address, the ports of YOUR ROS domain,
       optional PX4/Foxglove/rosbridge presets; preview first, one password prompt, removable
+- [x] Hardening tab: previewed, undoable fixes (screen lock, Screen Sharing, lock-screen notifications, SSH/credential
+      file permissions, kernel network settings, ufw IPv6 + logging, daily background protection)
+- [x] VPN status for Tailscale + Proton VPN together (route owner, DNS/IPv6 leaks, exit-node and kill-switch conflicts)
+- [x] Diagnostics: feature-by-feature readiness, polkit agent, install integrity
+- [ ] Hardening: backup check (is there a recent snapshot?), outbound connection visibility, DNS-over-TLS toggle
 - [ ] ROS firewall: Tailscale preset, and `ufw allow in proto igmp` as an explained one-click
 - [ ] Real integration tests for the privileged paths (apt, apt-mark, unattended-upgrade) inside a
       throwaway Ubuntu container; today they're verified against stubs

@@ -13,6 +13,7 @@ from linuxguardian_ui.pages.apps import AppsPage  # noqa: E402
 from linuxguardian_ui.pages.cache_cleaner import CacheCleanerPage  # noqa: E402
 from linuxguardian_ui.pages.dashboard import DashboardPage  # noqa: E402
 from linuxguardian_ui.pages.exposure import ExposurePage  # noqa: E402
+from linuxguardian_ui.pages.hardening import HardeningPage  # noqa: E402
 from linuxguardian_ui.pages.processes import ProcessesPage  # noqa: E402
 from linuxguardian_ui.pages.timeline import TimelinePage  # noqa: E402
 from linuxguardian_ui.pages.updates import UpdatesPage  # noqa: E402
@@ -21,7 +22,7 @@ from linuxguardian_ui.pages.updates import UpdatesPage  # noqa: E402
 class LinuxGuardianWindow(Adw.ApplicationWindow):
     def __init__(self, app: Adw.Application) -> None:
         super().__init__(application=app, title="LinuxGuardian Watchdog")
-        self.set_default_size(1000, 720)
+        self.set_default_size(1200, 780)
 
         # Adw.ToolbarView needs libadwaita >= 1.4; build the header + content
         # layout by hand instead so this also runs on 1.1-1.3 (e.g. Ubuntu 22.04).
@@ -48,11 +49,15 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
         root.append(self.toast_overlay)
 
         stack = Adw.ViewStack(vexpand=True)
+        self.view_stack = stack                  # pages (e.g. the Dashboard's Hardening card) switch tabs through this
         view_switcher.set_stack(stack)
         self.toast_overlay.set_child(stack)
 
         dashboard_page = stack.add_titled(DashboardPage(), "dashboard", "Dashboard")
         dashboard_page.set_icon_name("security-high-symbolic")
+
+        hardening_page = stack.add_titled(HardeningPage(self.toast_overlay), "hardening", "Hardening")
+        hardening_page.set_icon_name("security-medium-symbolic")
 
         processes_page = stack.add_titled(
             ProcessesPage(self.toast_overlay), "processes", "Processes"

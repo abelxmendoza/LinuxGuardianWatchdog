@@ -106,6 +106,24 @@ class DashboardPage(Gtk.Box):
         self.health_card.append(Gtk.Label(label="Checking scanner health…", xalign=0))
         self.append(self.health_card)
 
+        hard_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        hard_card.add_css_class("omega-card")
+        hard_card.set_margin_start(10)
+        hard_card.set_margin_end(10)
+        overview.append(hard_card)
+        hard_heading = Gtk.Label(label="Hardening and VPN", xalign=0)
+        hard_heading.add_css_class("omega-dim")
+        hard_card.append(hard_heading)
+        self.hardening_title = Gtk.Label(label="Checking…", xalign=0)
+        self.hardening_title.add_css_class("omega-heading")
+        hard_card.append(self.hardening_title)
+        self.vpn_line = Gtk.Label(label="", xalign=0, wrap=True)
+        self.vpn_line.add_css_class("omega-dim")
+        hard_card.append(self.vpn_line)
+        review_btn = Gtk.Button(label="Review and fix…", halign=Gtk.Align.START, margin_top=4)
+        review_btn.connect("clicked", self._open_hardening_tab)
+        hard_card.append(review_btn)
+
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         actions.add_css_class("process-toolbar")
         self.append(section_header("Quick actions"))
@@ -224,6 +242,7 @@ class DashboardPage(Gtk.Box):
         self._attached_scan = find_running_scan()
         self._refresh_last_scan()
         self._refresh_health()
+        self._refresh_hardening()
         if not self._attach_running_scan():
             self._on_audit_clicked(None)
 
@@ -567,6 +586,40 @@ class DashboardPage(Gtk.Box):
             )
 
         run_sync_async("rkhunter_baseline.py", ["--json"], done, timeout=300.0)
+
+    # ---- hardening + VPN summary ----------------------------------------
+    def _open_hardening_tab(self, _btn: Gtk.Button) -> None:
+        win = self.get_root()
+        stack = getattr(win, "view_stack", None)
+        if stack is not None:
+            stack.set_visible_child_name("hardening")
+
+    def _refresh_hardening(self) -> None:
+        def done(code: int, lines: list[str]) -> None:
+            try:
+                data = json.loads("".join(lines))
+            except json.JSONDecodeError:
+                self.hardening_title.set_label("Couldn't check")
+                return
+            sc = data["score"]
+            self.hardening_title.set_label(f"{sc['ok']} of {sc['total']} protections in place")
+            for css in ("omega-heading", "omega-warning"):
+                self.hardening_title.remove_css_class(css)
+            self.hardening_title.add_css_class("omega-heading" if sc["attention"] == 0 else "omega-warning")
+
+        def vpn_done(code: int, lines: list[str]) -> None:
+            try:
+                r = json.loads("".join(lines))
+            except json.JSONDecodeError:
+                return
+            ts, px = r.get("tailscale", {}), r.get("proton", {})
+            ts_on = ts.get("state") == "Running" and ts.get("online")
+            bad = sum(f["level"] == "attention" for f in r.get("findings", []))
+            self.vpn_line.set_label(f"Tailscale {'●' if ts_on else '○'}   Proton VPN {'●' if px.get('connected') else '○'}"
+                                    + (f"   ·   {bad} VPN issue{'s' if bad != 1 else ''}" if bad else ""))
+
+        run_sync_async("hardening.py", ["--check", "--json"], done, timeout=60.0)
+        run_sync_async("vpn_status.py", ["--json"], vpn_done, timeout=45.0)
 
     # ---- scanner health ------------------------------------------------
     def _refresh_health(self) -> bool:
