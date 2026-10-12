@@ -528,6 +528,30 @@ def check_scheduler() -> dict:
                              "Runs at low priority so it stays out of the way."], recommended=True)])
 
 
+def sensors_timer_enabled() -> bool | None:
+    if not shutil.which("systemctl"):
+        return None
+    rc, out = _run(["systemctl", "--user", "is-enabled", "linuxguardian-sensors.timer"])
+    return out.strip() == "enabled"
+
+
+def check_live_monitoring() -> dict:
+    why = ("The daily scan finds what is already there. Live monitoring looks every 5 minutes for what an attack does while it happens: "
+           "guessed logins, programs running from /tmp, a new program phoning home, something adding itself to startup.")
+    on = sensors_timer_enabled()
+    if on is None:
+        return check("live_monitoring", "Defences", "Live attack monitoring", "unknown", "Couldn't read your user services.", why)
+    if on:
+        return check("live_monitoring", "Defences", "Live attack monitoring", "ok", "The blue-team sensors run every 5 minutes and alert you to anything new.", why)
+    return check("live_monitoring", "Defences", "Live attack monitoring", "attention",
+                 "Nothing is watching for an attack as it happens.", why,
+                 fixes=[fix("sensors_timer", "Turn on live monitoring", "user",
+                            ["Installs a job that runs as you (no password) every 5 minutes.",
+                             "Checks login history, running programs, new network behaviour, startup entries, accounts and USB devices.",
+                             "Learns what's normal on this laptop first (3 days of quiet), then tells you about new, suspicious things.",
+                             "Only observes: it never stops, blocks or changes anything."], recommended=True)])
+
+
 def check_apparmor() -> dict:
     why = "AppArmor confines programs so a hacked app can't reach everything you can."
     text = read_text(Path(os.environ.get("LG_APPARMOR", "/sys/module/apparmor/parameters/enabled")))
@@ -539,7 +563,7 @@ def check_apparmor() -> dict:
 
 CHECKS = (check_screen_sharing, check_screen_lock, check_lock_notifications, check_auto_login, check_firewall, check_firewall_ipv6,
           check_firewall_logging, check_kernel_settings, check_dns, check_ssh_keys, check_secret_files, check_disk_encryption,
-          check_secure_boot, check_apparmor, check_scheduler)
+          check_secure_boot, check_apparmor, check_scheduler, check_live_monitoring)
 
 
 def collect() -> list[dict]:
@@ -558,6 +582,7 @@ FIX_LABELS = {
     "vino_tailscale": ("Screen Sharing limited to Tailscale", "user"), "screen_lock": ("Screen locks after 5 minutes", "user"),
     "lock_notifications": ("Notifications hidden on the lock screen", "user"), "perms_ssh": ("SSH files made private", "user"),
     "perms_secrets": ("Credential files made private", "user"), "scheduler": ("Daily background protection", "user"),
+    "sensors_timer": ("Live attack monitoring", "user"),
     "sysctl": ("Recommended kernel settings", "root"), "ufw_ipv6": ("Firewall filters IPv6", "root"),
     "ufw_logging": ("Firewall logging on", "root"),
 }
@@ -749,6 +774,23 @@ def apply_scheduler() -> dict:
     return _result(True, "Daily background protection is on.")
 
 
+def apply_sensors_timer() -> dict:
+    rc, out = _run([str(SUITE_DIR / "install_scheduler.sh"), "--install-sensors"], timeout=60)
+    if rc != 0 or sensors_timer_enabled() is not True:
+        return _result(False, "Couldn't turn on live monitoring: " + (out.strip().splitlines()[-1] if out.strip() else "unknown error"))
+    _run([sys.executable, str(SUITE_DIR / "sensors.py"), "--run"], timeout=60)         # learn what's normal right away
+    remember("sensors_timer", {"installed": True})
+    return _result(True, "Live monitoring is on. It is learning what's normal on this laptop.")
+
+
+def undo_sensors_timer() -> dict:
+    rc, out = _run([str(SUITE_DIR / "install_scheduler.sh"), "--uninstall-sensors"], timeout=60)
+    if rc != 0:
+        return _result(False, "Couldn't turn off live monitoring.")
+    forget("sensors_timer")
+    return _result(True, "Live monitoring is off.")
+
+
 def undo_scheduler() -> dict:
     rc, out = _run([str(SUITE_DIR / "install_scheduler.sh"), "--uninstall"], timeout=60)
     if rc != 0:
@@ -758,7 +800,7 @@ def undo_scheduler() -> dict:
 
 
 USER_FIXES = {
-    "scheduler": (apply_scheduler, undo_scheduler),
+    "scheduler": (apply_scheduler, undo_scheduler), "sensors_timer": (apply_sensors_timer, undo_sensors_timer),
     "vino_off": (apply_vino_off, undo_vino_off), "vino_prompt": (apply_vino_prompt, lambda: undo_gsettings("vino_prompt")),
     "vino_tailscale": (apply_vino_tailscale, lambda: _undo_tailscale()), "screen_lock": (apply_screen_lock, lambda: undo_gsettings("screen_lock")),
     "lock_notifications": (apply_lock_notifications, lambda: undo_gsettings("lock_notifications")),

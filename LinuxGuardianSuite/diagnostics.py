@@ -62,6 +62,7 @@ FEATURES: dict[str, tuple[str, ...]] = {
     "VPN status": ("ip",),
     "Notifications": ("notify-send",),
     "Scheduled protection": ("systemctl",),
+    "Live attack monitoring": ("ss", "systemctl"),
 }
 
 
@@ -133,6 +134,15 @@ def environment_report() -> list[dict]:
     out.append(env_check("scheduler", "Daily protection is scheduled", enabled.strip() == "enabled" if shutil.which("systemctl") else None,
                          "The daily scan timer is installed.", "No daily scheduled scan, so nothing runs unless you open the app.",
                          "Run: LinuxGuardianSuite/install_scheduler.sh --install", False))
+    auth = Path(os.environ.get("LG_AUTH_LOG", "/var/log/auth.log"))
+    try:
+        with auth.open("r"):
+            readable = True
+    except OSError:
+        readable = False
+    out.append(env_check("auth_log", "Login history is readable (for attack monitoring)", readable, "The login sensor can read the auth log.",
+                         "The login sensor can't read /var/log/auth.log, so guessed logins and sudo abuse won't be noticed.",
+                         "Join the 'adm' group: sudo usermod -aG adm $USER, then log out and in.", False))
     desktop = Path.home() / ".local/share/applications/linuxguardian-watchdog.desktop"
     out.append(env_check("launcher", "App launcher is installed", desktop.exists(), "The menu/dock launcher is installed.",
                          "No launcher entry for the app.", "Run: LinuxGuardianSuiteUI/install_desktop_entry.sh --install", False))

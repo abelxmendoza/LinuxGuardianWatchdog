@@ -15,7 +15,7 @@ from linuxguardian_ui.pages.dashboard import DashboardPage  # noqa: E402
 from linuxguardian_ui.pages.exposure import ExposurePage  # noqa: E402
 from linuxguardian_ui.pages.hardening import HardeningPage  # noqa: E402
 from linuxguardian_ui.pages.processes import ProcessesPage  # noqa: E402
-from linuxguardian_ui.pages.timeline import TimelinePage  # noqa: E402
+from linuxguardian_ui.pages.incidents import InvestigatePage  # noqa: E402
 from linuxguardian_ui.pages.updates import UpdatesPage  # noqa: E402
 from linuxguardian_ui.pages.vpn import VpnPage  # noqa: E402
 
@@ -86,8 +86,8 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
         apps_page = stack.add_titled(AppsPage(self.toast_overlay), "apps", "Apps")
         apps_page.set_icon_name("folder-download-symbolic")
 
-        timeline_page = stack.add_titled(TimelinePage(self.toast_overlay), "timeline", "Timeline")
-        timeline_page.set_icon_name("document-open-recent-symbolic")
+        incidents_page = stack.add_titled(InvestigatePage(self.toast_overlay), "incidents", "Incidents")
+        incidents_page.set_icon_name("dialog-warning-symbolic")
         # Future pages: settings — see docs/ROADMAP.md
 
     def _show_about(self, _btn: Gtk.Button) -> None:

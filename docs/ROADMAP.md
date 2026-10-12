@@ -48,6 +48,11 @@ macOS original's feature set:
       file permissions, kernel network settings, ufw IPv6 + logging, daily background protection)
 - [x] VPN status for Tailscale + Proton VPN together (route owner, DNS/IPv6 leaks, exit-node and kill-switch conflicts)
 - [x] Diagnostics: feature-by-feature readiness, polkit agent, install integrity
+- [x] Blue team phase 1: live sensors (logins, processes, network, startup entries, accounts, USB, dropped executables),
+      incidents with plain-language stories and next steps, one-click read-only evidence bundles, allow-listing
+- [ ] Blue team phase 2: more sensors (journald, browser-extension/npm/pip install watchers, DNS anomalies, ptrace/inject)
+- [ ] Blue team phase 3: opt-in AI investigator on top of incident + evidence (local model first, redacted, read-only,
+      every suggestion shown for approval; never auto-remediates; treats log text as untrusted input)
 - [ ] Hardening: backup check (is there a recent snapshot?), outbound connection visibility, DNS-over-TLS toggle
 - [ ] ROS firewall: Tailscale preset, and `ufw allow in proto igmp` as an explained one-click
 - [ ] Real integration tests for the privileged paths (apt, apt-mark, unattended-upgrade) inside a

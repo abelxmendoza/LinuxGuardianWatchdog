@@ -5,6 +5,8 @@
 # Usage:
 #   install_scheduler.sh --install     Install the daily scan timer
 #   install_scheduler.sh --uninstall   Remove it
+#   install_scheduler.sh --install-sensors    Live monitoring: run the blue-team sensors every 5 minutes
+#   install_scheduler.sh --uninstall-sensors  Turn live monitoring off
 #   install_scheduler.sh -h | --help
 set -uo pipefail
 
@@ -56,6 +58,48 @@ EOF
   lg_ok "Installed and enabled $TIMER_NAME (systemctl --user list-timers to verify)"
 }
 
+SENSORS_SERVICE="linuxguardian-sensors.service"
+SENSORS_TIMER="linuxguardian-sensors.timer"
+
+install_sensors() {
+  mkdir -p "$UNIT_DIR"
+  cat > "$UNIT_DIR/$SENSORS_SERVICE" <<EOF
+[Unit]
+Description=LinuxGuardian live monitoring (blue-team sensors)
+
+[Service]
+Type=oneshot
+# Light and quiet: low CPU and disk priority, finishes in a second or two.
+Nice=15
+IOSchedulingClass=idle
+ExecStart=$SCRIPT_DIR/sensors.py --run
+ExecStartPost=-$SCRIPT_DIR/notify_events.py --send
+EOF
+  cat > "$UNIT_DIR/$SENSORS_TIMER" <<EOF
+[Unit]
+Description=Run LinuxGuardian live monitoring every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$SENSORS_TIMER"
+  lg_ok "Live monitoring is on ($SENSORS_TIMER)."
+}
+
+uninstall_sensors() {
+  systemctl --user disable --now "$SENSORS_TIMER" 2>/dev/null || true
+  # ${VAR:?} makes the shell stop with an error instead of ever deleting a bare "/" if a variable were empty.
+  rm -f "${UNIT_DIR:?}/${SENSORS_SERVICE:?}" "${UNIT_DIR:?}/${SENSORS_TIMER:?}"
+  systemctl --user daemon-reload
+  lg_ok "Live monitoring is off."
+}
+
 uninstall_units() {
   systemctl --user disable --now "$TIMER_NAME" 2>/dev/null || true
   rm -f "$UNIT_DIR/$SERVICE_NAME" "$UNIT_DIR/$TIMER_NAME"
@@ -66,6 +110,8 @@ uninstall_units() {
 case "${1:-}" in
   --install) install_units ;;
   --uninstall) uninstall_units ;;
+  --install-sensors) install_sensors ;;
+  --uninstall-sensors) uninstall_sensors ;;
   -h|--help|"") usage; exit 0 ;;
   *) lg_error "Unknown option: $1"; usage; exit 1 ;;
 esac

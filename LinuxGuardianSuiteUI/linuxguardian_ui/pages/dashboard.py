@@ -128,6 +128,9 @@ class DashboardPage(Gtk.Box):
         self.vpn_line = Gtk.Label(label="", xalign=0, wrap=True)
         self.vpn_line.add_css_class("omega-dim")
         hard_card.append(self.vpn_line)
+        self.incident_line = Gtk.Label(label="", xalign=0)
+        self.incident_line.add_css_class("omega-dim")
+        hard_card.append(self.incident_line)
         btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, margin_top=4)
         review_btn = Gtk.Button(label="Review and fix…")
         review_btn.connect("clicked", self._open_hardening_tab)
@@ -135,6 +138,9 @@ class DashboardPage(Gtk.Box):
         vpn_btn = Gtk.Button(label="VPN details")
         vpn_btn.connect("clicked", lambda _b: self._open_tab("vpn"))
         btn_row.append(vpn_btn)
+        inc_btn = Gtk.Button(label="Incidents")
+        inc_btn.connect("clicked", lambda _b: self._open_tab("incidents"))
+        btn_row.append(inc_btn)
         hard_card.append(btn_row)
 
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -666,8 +672,20 @@ class DashboardPage(Gtk.Box):
             self.vpn_line.set_label(f"Tailscale {'●' if ts_on else '○'}   Proton VPN {'●' if px.get('connected') else '○'}"
                                     + (f"   ·   {bad} VPN issue{'s' if bad != 1 else ''}" if bad else ""))
 
+        def inc_done(code: int, lines: list[str]) -> None:
+            try:
+                incs = json.loads("".join(lines))
+            except json.JSONDecodeError:
+                return
+            bad = [i for i in incs if i["severity"] in ("warning", "critical")]
+            self.incident_line.set_label(f"{len(bad)} open incident{'s' if len(bad) != 1 else ''}" if bad else "No open incidents")
+            for css in ("omega-warning", "omega-critical", "omega-dim"):
+                self.incident_line.remove_css_class(css)
+            self.incident_line.add_css_class("omega-critical" if any(i["severity"] == "critical" for i in bad) else "omega-warning" if bad else "omega-dim")
+
         run_sync_async("hardening.py", ["--check", "--json"], done, timeout=60.0)
         run_sync_async("vpn_status.py", ["--json"], vpn_done, timeout=45.0)
+        run_sync_async("incidents.py", ["--json"], inc_done, timeout=30.0)
 
     # ---- scanner health ------------------------------------------------
     def _refresh_health(self) -> bool:

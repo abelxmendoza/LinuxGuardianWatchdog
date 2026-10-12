@@ -119,6 +119,32 @@ tested to hold on its own. Import refuses on a different release or CPU, skips h
 or key (third-party apps are listed with the repo they need), never removes (`apt-get install --no-remove`),
 and installs classic (unconfined) snaps only when explicitly included.
 
+## Blue team: sensors, incidents, evidence
+
+`sensors.py` runs every 5 minutes (a user systemd timer, no root) and watches for what an attack DOES: failed logins and a
+login right after them, new accounts and admin-group changes, sensitive sudo use, programs running from /tmp or whose file
+was deleted, programs pretending to be kernel threads, a program talking to the internet for the first time or on a port
+known for malware, new startup entries/cron jobs/services, new USB devices (keyboard+storage composites), and new
+executables dropped in /tmp or `~/.local/bin`. Plain, inspectable rules, no AI. Design points that matter:
+
+- **Learn first.** The first run only records what is normal; network behaviour stays quiet for 3 days. Everything is
+  deduplicated (a finding isn't repeated for 24 h), so a five-minute timer doesn't flood you.
+- **Tunable.** "This is expected" adds a path to `~/.linuxguardian/sensors_allow.json` (broad paths like `/tmp/` are refused).
+  AppImage mounts and package-upgrade "deleted" binaries under /usr are already treated as normal.
+- **Honest about itself.** Real finding from the first run on this laptop: our own `sudo -n` audit probe wrote
+  "a password is required" lines that looked like failed sudo; those are filtered.
+- **Secrets never stored.** Command lines are scrubbed of tokens/passwords/bearer values/URL credentials before anything is written.
+
+`incidents.py` correlates events that share an entity (same program, user, address or file) within two hours into ONE story,
+names it ("A program running from a temporary folder is talking to the internet"), and always says why it matters, why it
+may be harmless, and what to check. Interpreters (python, node, bash) never glue unrelated events together; lone routine
+notes and integrity changes alone never become incidents. `evidence.py` collects a read-only bundle (process tree,
+connections, logins, startup entries, program paths/owners/hashes) into a mode-700 folder, never reading process
+environments or your documents. Detection stays separate from remediation: nothing here stops, blocks or deletes.
+
+An AI investigator can later sit on top of exactly this structure (incident + evidence in, explanation out), read-only,
+local-first, with every suggestion shown for your approval; it is deliberately not part of detection.
+
 ## Activity view
 
 Scripts print terminal text; the Dashboard shows it as plain-language CARDS instead. `activity.py` (pure Python, no GTK)

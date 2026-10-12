@@ -126,3 +126,14 @@ def test_render_text_names_the_missing_pieces(lg, monkeypatch):
     monkeypatch.setenv("PATH", make_path(lg, [t for t in dg.TOOLS if t != "ufw"]))
     text = dg.render_text(dg.collect(include_scripts=False))
     assert "Firewall helper" in text and "ufw" in text and "sudo apt install ufw" in text and "needs attention" in text
+
+
+def test_attack_monitoring_readiness_includes_the_auth_log(lg, monkeypatch, tmp_path):
+    monkeypatch.setenv("PATH", make_path(lg, list(dg.TOOLS)))
+    monkeypatch.setenv("LG_AUTH_LOG", str(tmp_path / "nope.log"))
+    env = {e["id"]: e for e in dg.environment_report()}
+    assert env["auth_log"]["state"] == "note" and "adm" in env["auth_log"]["hint"]
+    (tmp_path / "ok.log").write_text("x")
+    monkeypatch.setenv("LG_AUTH_LOG", str(tmp_path / "ok.log"))
+    assert {e["id"]: e for e in dg.environment_report()}["auth_log"]["state"] == "ok"
+    assert "Live attack monitoring" in {f["feature"] for f in dg.collect(include_scripts=False)["features"]}

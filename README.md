@@ -57,6 +57,9 @@ LinuxGuardianWatchdog/
 │   ├── notify_events.py         # Desktop notifications for new warnings
 │   ├── rkhunter_baseline.py     # Checks warned files against their packages before a baseline refresh
 │   ├── app_manifest.py          # Export/plan app lists for moving to another laptop
+│   ├── sensors.py               # Blue-team sensors (logins, processes, network, startup entries, accounts, USB)
+│   ├── incidents.py             # Groups sensor events into explained incidents
+│   ├── evidence.py              # Read-only evidence bundle for an incident
 │   ├── hardening.py             # Hardening checklist with previewed, undoable fixes
 │   ├── linux_hardening.sh       # The hardening fixes that need root (fixed scripts)
 │   ├── vpn_status.py            # Tailscale + Proton VPN status and leak/conflict diagnostics
@@ -105,6 +108,9 @@ cd LinuxGuardianSuite
 ./linux_apps.sh --install apps.json        # ...install the Ubuntu apps and snaps that are available (password via polkit)
 ./linux_watchdog.sh --init                 # file integrity: Documents + start-up locations (ssh, autostart, shell files)
 ./timeline.py --min-severity warning       # the security timeline from the terminal
+./sensors.py --run                         # blue team: look for attacks in progress (the timer runs this every 5 minutes)
+./incidents.py                             # related events grouped into plain-language incidents
+./evidence.py --incident ID                # read-only evidence bundle for an incident
 ./hardening.py --check                     # hardening checklist: what's weak, why, and the fix (no root)
 ./linux_hardening.sh --apply sysctl        # the fixes that need a password (sysctl | ufw_ipv6 | ufw_logging); --undo reverses
 ./vpn_status.py                            # Tailscale + Proton VPN: connected? leaking? fighting each other?

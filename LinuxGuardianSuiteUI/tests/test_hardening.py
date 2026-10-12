@@ -431,3 +431,22 @@ def test_applied_changes_stay_undoable_after_the_check_turns_green(box):
 def test_every_fix_that_can_be_applied_has_a_label_for_the_undo_list():
     for fid in list(hd.USER_FIXES) + list(hd.ROOT_FIXES):
         assert fid in hd.FIX_LABELS, fid
+
+
+# ------------------------------------------------------------------ live monitoring
+def test_live_monitoring_check_fix_and_undo(box):
+    c = by_id("live_monitoring")
+    assert c["state"] == "attention" and c["fixes"][0]["id"] == "sensors_timer"
+    assert any("never stops, blocks or changes" in line for line in c["fixes"][0]["effect"])
+    r = hd.apply("sensors_timer")
+    assert r["ok"] and by_id("live_monitoring")["state"] == "ok"
+    unit = box / "home/.config/systemd/user/linuxguardian-sensors.timer"
+    text = unit.read_text()
+    assert "OnUnitActiveSec=5min" in text
+    assert "sensors.py --run" in (box / "home/.config/systemd/user/linuxguardian-sensors.service").read_text()
+    assert hd.undo("sensors_timer")["ok"] and by_id("live_monitoring")["state"] == "attention" and not unit.exists()
+
+
+def test_live_monitoring_fix_reports_failure_honestly(box, monkeypatch):
+    monkeypatch.setattr(hd, "sensors_timer_enabled", lambda: False)
+    assert not hd.apply("sensors_timer")["ok"] and not hd.is_applied("sensors_timer")
