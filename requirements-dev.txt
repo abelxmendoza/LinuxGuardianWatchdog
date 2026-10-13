@@ -1,7 +1,7 @@
 # Tools used to TEST and CHECK LinuxGuardian. None of them is needed to RUN it (the app itself uses only the Python standard library
 # plus PyGObject from your distribution: sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1).
 # Pinned so a CI run and a local run behave the same. Update deliberately (Dependabot opens a pull request; nothing merges itself).
-pytest==9.0.3
+pytest==9.1.1
 pytest-cov==3.0.0
 coverage==6.2
 ruff==0.17.0
