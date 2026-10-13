@@ -16,7 +16,7 @@ from gi.repository import Adw, Gio, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
-from linuxguardian_ui.components import page_header, section_header  # noqa: E402
+from linuxguardian_ui.components import copy_action, widget_report, page_header, section_header  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.pages.ai_dialogs import AiSettingsWindow, InvestigationWindow  # noqa: E402
 from linuxguardian_ui.pages.timeline import TimelinePage  # noqa: E402
@@ -346,6 +346,8 @@ class InvestigatePage(Gtk.Box):
         switch.append(self.tl_btn)
         self.stack = Gtk.Stack(vexpand=True)
         self.append(self.stack)
+        self.append(copy_action("Copy All Page Details", lambda: widget_report(self, "Security incidents")))
+
         scroller = Gtk.ScrolledWindow(vexpand=True)
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.incidents = IncidentsView(toast_overlay)

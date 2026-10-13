@@ -78,3 +78,72 @@ def info_banner(message: str) -> Gtk.Widget:
     box.append(Gtk.Image.new_from_icon_name("dialog-information-symbolic"))
     box.append(Gtk.Label(label=message, xalign=0, wrap=True, hexpand=True))
     return box
+
+
+def copy_action(label, get_text):
+    """Copy current data on click, with visible success, empty, and failure feedback."""
+    from linuxguardian_ui.clipboard import copy_text
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    button = Gtk.Button(label=label)
+    status = Gtk.Label(label="", wrap=True)
+    status.add_css_class("omega-dim")
+    button.set_tooltip_text("Copies plain text. Reports may include local paths and commands; review before sharing.")
+    def clicked(_button):
+        try:
+            text = get_text()
+            if not text:
+                status.set_text("Nothing to copy yet")
+                return
+            copy_text(text)
+            status.set_text("Copied")
+        except Exception as exc:
+            status.set_text(f"Copy failed: {exc}")
+    button.connect("clicked", clicked)
+    box.append(button)
+    box.append(status)
+    return box
+
+
+def report_window(parent, title, text):
+    """Scrollable, selectable terminal-style report with a Copy All action."""
+    window = Gtk.Window(title=title, transient_for=parent, modal=True)
+    window.set_default_size(760, 560)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                  margin_top=16, margin_bottom=16, margin_start=16, margin_end=16)
+    window.set_child(box)
+    box.append(copy_action("Copy All", lambda: text))
+    scroller = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+    view = Gtk.TextView(editable=False, monospace=True, wrap_mode=Gtk.WrapMode.WORD_CHAR)
+    view.get_buffer().set_text(text or "No output captured yet.")
+    scroller.set_child(view)
+    box.append(scroller)
+    close = Gtk.Button(label="Close", halign=Gtk.Align.END)
+    close.connect("clicked", lambda _b: window.close())
+    box.append(close)
+    window.present()
+    return window
+
+
+def widget_report(widget, title="Page report"):
+    """Copy rendered page text, including collapsed details, without triggering actions."""
+    from linuxguardian_ui.reports import timestamp
+    lines = [f"LinuxGuardian — {title}", f"Captured: {timestamp()}",
+             "Scope: current page text, including collapsed technical details. Not a new check.", ""]
+    def visit(node):
+        if isinstance(node, (Gtk.Button, Gtk.DropDown)):
+            return
+        if isinstance(node, Gtk.Label):
+            text = node.get_text().strip()
+            if text:
+                is_heading = any(node.has_css_class(c) for c in ("heading", "title-1", "title-2", "title-3", "title-4", "activity-title", "activity-group-title", "update-name", "omega-heading"))
+                lines.append(("\n## " if is_heading else "") + text)
+        elif isinstance(node, Gtk.TextView):
+            buffer = node.get_buffer()
+            lines.extend(["\n## Terminal / technical output", buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)])
+            return
+        child = node.get_first_child()
+        while child:
+            visit(child)
+            child = child.get_next_sibling()
+    visit(widget)
+    return "\n".join(lines) + "\n"

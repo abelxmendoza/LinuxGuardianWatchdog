@@ -16,7 +16,7 @@ from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
-from linuxguardian_ui.components import page_header, section_header  # noqa: E402
+from linuxguardian_ui.components import copy_action, widget_report, page_header, section_header  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.scripts import run_streaming_async, run_sync_async  # noqa: E402
 
@@ -53,6 +53,8 @@ class HardeningPage(Gtk.Box):
 
         self.append(page_header("Hardening", "Make this laptop harder to attack, one safe step at a time. Nothing changes until you confirm.",
                                 "security-high-symbolic"))
+        self.append(copy_action("Copy All Page Details", lambda: widget_report(self, "Hardening posture")))
+
         scroller = Gtk.ScrolledWindow(vexpand=True)
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.append(scroller)
@@ -181,7 +183,11 @@ class HardeningPage(Gtk.Box):
         rest = [c for c in self._checks if c["state"] != "attention"]
         if needs:
             self.checks_box.append(section_header("Needs your attention"))
+            last_group = None
             for c in sorted(needs, key=lambda c: GROUP_ORDER.index(c["group"]) if c["group"] in GROUP_ORDER else 99):
+                if c["group"] != last_group:
+                    self.checks_box.append(section_header(c["group"]))
+                    last_group = c["group"]
                 self.checks_box.append(self._card(c))
         if getattr(self, "_applied", None):
             self.checks_box.append(section_header("Changes LinuxGuardian made (you can undo any of them)"))
@@ -217,7 +223,10 @@ class HardeningPage(Gtk.Box):
         if c["detail"]:
             ex = Gtk.Expander(label="Technical details")
             d = _label(c["detail"], "update-raw", selectable=True)
-            ex.set_child(d)
+            detail_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            detail_box.append(copy_action("Copy All Details", lambda: widget_report(card, c["title"])))
+            detail_box.append(d)
+            ex.set_child(detail_box)
             col.append(ex)
         if c["advice"] and c["state"] != "ok":
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)

@@ -16,7 +16,8 @@ from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui.activity import Activity
 from linuxguardian_ui.activity_view import ActivityView
-from linuxguardian_ui.components import page_header, section_header
+from linuxguardian_ui.components import page_header, section_header, copy_action, report_window
+from linuxguardian_ui.reports import ActivityReport, export_session, export_saved_scan
 from linuxguardian_ui.dialogs import confirm, review
 
 from linuxguardian_ui.progress import (  # noqa: E402
@@ -83,6 +84,7 @@ class DashboardPage(Gtk.Box):
         self.score_detail = Gtk.Label(label="Run the audit to see your score.", xalign=0, wrap=True)
         self.score_detail.add_css_class("omega-dim")
         score_text.append(self.score_detail)
+        score_text.append(copy_action("Copy Audit", self._audit_report))
 
         last_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         last_card.add_css_class("omega-card")
@@ -105,6 +107,7 @@ class DashboardPage(Gtk.Box):
         )
         self.last_scan_detail.add_css_class("omega-dim")
         last_card.append(self.last_scan_detail)
+        last_card.append(copy_action("Copy Scan Report", lambda: export_saved_scan(load_last_scan())))
 
         body.append(section_header("Scanner health"))
         self.health_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -238,6 +241,12 @@ class DashboardPage(Gtk.Box):
         self.progress_card.append(self.current_label)
 
         body.append(section_header("Activity"))
+        report_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        report_actions.append(copy_action("Copy All Activity", lambda: export_session(self._reports)))
+        history = Gtk.Button(label="Session reports")
+        history.connect("clicked", lambda _b: report_window(self.get_root(), "Session reports", export_session(self._reports)))
+        report_actions.append(history)
+        body.append(report_actions)
         self.activity_view = ActivityView()
         self.activity_view.empty_text = "Nothing has run yet. Use a button above: results show up here as plain-language cards."
         self.activity_view.on_action = self._on_activity_action
@@ -250,7 +259,10 @@ class DashboardPage(Gtk.Box):
         tech = Gtk.Expander(label="Technical details (raw output)")
         body.append(tech)
         raw_scroller = Gtk.ScrolledWindow(min_content_height=160)
-        tech.set_child(raw_scroller)
+        raw_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        raw_box.append(copy_action("Copy All Terminal Output", lambda: "\n".join(self._active_report.lines) if self._active_report else ""))
+        raw_box.append(raw_scroller)
+        tech.set_child(raw_box)
         self.output_view = Gtk.TextView(editable=False, monospace=True)
         self.output_view.add_css_class("omega-card")
         self.output_view.set_wrap_mode(Gtk.WrapMode.CHAR)
@@ -258,6 +270,8 @@ class DashboardPage(Gtk.Box):
         self.buffer = self.output_view.get_buffer()
         self._end_mark = self.buffer.create_mark("tail", self.buffer.get_end_iter(), False)
 
+        self._reports: list[ActivityReport] = []
+        self._active_report = None
         self._current_lines: list[str] = []
         self._busy = False
         self._job_label = ""
@@ -274,6 +288,13 @@ class DashboardPage(Gtk.Box):
         self._refresh_hardening()
         if not self._attach_running_scan():
             self._on_audit_clicked(None)
+
+    def _audit_report(self) -> str:
+        return next((r.export() for r in reversed(self._reports) if r.title == "Security audit"), "")
+
+    def _begin_report(self, title, command):
+        self._active_report = ActivityReport(title, command)
+        self._reports.append(self._active_report)
 
     def _set_window_title(self, suffix: str | None) -> None:
         win = self.get_root()
@@ -377,6 +398,8 @@ class DashboardPage(Gtk.Box):
 
     def _append_line(self, line: str) -> bool:
         line = _ANSI_RE.sub("", line)
+        if self._active_report:
+            self._active_report.lines.append(line)
         progress = parse_progress_line(line)
         if progress:
             self._apply_progress(progress)
@@ -429,6 +452,7 @@ class DashboardPage(Gtk.Box):
             return False
         self._attached_scan = scan
         self._clear()
+        self._begin_report("Malware/rootkit scan", "Attached to an existing scan; earlier output not captured")
         self._append_line("$ linux_guardian.sh --scan")
         self._append_line("[INFO] Attached to the scan already running — live progress is below.")
         self._append_line(
@@ -462,6 +486,8 @@ class DashboardPage(Gtk.Box):
             return False
         snap = snapshot(self._attached_scan)
         if not snap.alive:
+            if self._active_report:
+                self._active_report.finished = True
             self._append_line("[INFO] Scanner process ended.")
             self._set_busy(False, "Malware/rootkit scan")
             self._finish_progress(0, "Malware/rootkit scan")
@@ -491,10 +517,14 @@ class DashboardPage(Gtk.Box):
             self._attach_tick_id = 0
         self._attached_scan = None
         self._clear()
+        self._begin_report(label, " ".join([script, *args]))
         self._append_line(f"$ {script} {' '.join(args)}")
         self._set_busy(True, label)
 
         def on_done(code: int) -> bool:
+            if self._active_report:
+                self._active_report.finished = True
+                self._active_report.exit_code = code
             if code == 130:
                 self._append_line(f"\n[{label} stopped]")
             else:
@@ -505,7 +535,7 @@ class DashboardPage(Gtk.Box):
             self._flush_activity()
             self._finish_progress(code, label)
             self._cancel = None
-            if label == "Security audit" and code == 0:
+            if label == "Security audit":
                 self._update_score(self._current_lines)
             self._unstoppable = False
             self._rootkit_job = False

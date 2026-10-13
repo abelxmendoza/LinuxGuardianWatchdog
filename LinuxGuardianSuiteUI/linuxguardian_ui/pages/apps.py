@@ -18,7 +18,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
-from linuxguardian_ui.components import page_header, section_header  # noqa: E402
+from linuxguardian_ui.components import copy_action, widget_report, page_header, section_header  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.scripts import run_streaming_async, run_sync_async  # noqa: E402
 
@@ -42,6 +42,8 @@ class AppsPage(Gtk.Box):
             getattr(self, f"set_margin_{side}")(24)
 
         self.append(page_header("Apps", "Move your apps to another laptop running the same Ubuntu.", "folder-download-symbolic"))
+
+        self.append(copy_action("Copy All Page Details", lambda: widget_report(self, "App migration")))
 
         scroller = Gtk.ScrolledWindow(vexpand=True)
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)

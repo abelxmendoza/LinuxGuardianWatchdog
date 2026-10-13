@@ -6,6 +6,8 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Pango  # noqa: E402
 
+from linuxguardian_ui.components import copy_action
+from linuxguardian_ui.reports import export_card, audit_topic
 from linuxguardian_ui.activity import Activity, Card, Group  # noqa: E402
 
 SYMBOL = {"ok": "✓", "warn": "⚠", "fail": "✗", "info": "•", "running": "…"}
@@ -53,6 +55,7 @@ class ActivityView(Gtk.Box):
         banner.append(sym)
         banner.append(_label(text, "activity-headline"))
         self.append(banner)
+        self.append(copy_action("Copy All Findings", lambda: "\n".join(export_card(c) for c in activity.cards())))
         for card in activity.cards():
             self.append(self._card(card))
 
@@ -70,9 +73,18 @@ class ActivityView(Gtk.Box):
         chip.add_css_class("activity-chip")
         chip.add_css_class(f"activity-chip-{c.status}")
         head.append(chip)
+        head.append(copy_action("Copy Details", lambda: export_card(c)))
         if c.summary:
             outer.append(_label(c.summary))
-        for row in c.rows:
+        rows = sorted(c.rows, key=lambda row: audit_topic(row.text)[0]) if c.key == "audit" else c.rows
+        last_topic = None
+        for row in rows:
+            if c.key == "audit":
+                topic, explanation = audit_topic(row.text)
+                if topic != last_topic:
+                    outer.append(_label(topic, "activity-group-title"))
+                    outer.append(_label(explanation, "omega-dim"))
+                    last_topic = topic
             line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             mark = Gtk.Label(label=SYMBOL.get(row.kind, "•"), valign=Gtk.Align.START)
             mark.add_css_class(f"activity-mark-{row.kind}")

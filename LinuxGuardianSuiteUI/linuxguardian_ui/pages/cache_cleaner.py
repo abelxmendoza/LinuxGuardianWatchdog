@@ -13,7 +13,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
-from linuxguardian_ui.components import page_header, info_banner
+from linuxguardian_ui.components import page_header, info_banner, report_window
+from linuxguardian_ui.reports import ActivityReport, export_session
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.scripts import run_sync_async  # noqa: E402
@@ -52,6 +53,8 @@ class CacheCleanerPage(Gtk.Box):
     def __init__(self, toast_overlay: Adw.ToastOverlay) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self._toast_overlay = toast_overlay
+        self._reports: list[ActivityReport] = []
+        self._scan_failed = False
         self.set_margin_top(24)
         self.set_margin_bottom(24)
         self.set_margin_start(24)
@@ -77,6 +80,9 @@ class CacheCleanerPage(Gtk.Box):
         copy_btn = Gtk.Button(label="Copy All")
         copy_btn.connect("clicked", self._on_copy_all)
         toolbar.append(copy_btn)
+        details_btn = Gtk.Button(label="Technical output")
+        details_btn.connect("clicked", lambda _b: report_window(self.get_root(), "Cache scan & cleanup reports", export_session(self._reports)))
+        toolbar.append(details_btn)
 
         self.spinner = Gtk.Spinner()
         toolbar.append(self.spinner)
@@ -118,6 +124,8 @@ class CacheCleanerPage(Gtk.Box):
     def _on_scan_done(self, code: int, lines: list[str]) -> bool:
         self._set_busy(False)
         self._scanned = True
+        self._scan_failed = code != 0
+        self._reports.append(ActivityReport("Cache scan", "linux_cache_cleanup.sh --scan", lines=list(lines), exit_code=code, finished=True))
         self._category_bytes = {}
         self._category_paths = {}
         for line in lines:
@@ -149,7 +157,7 @@ class CacheCleanerPage(Gtk.Box):
 
         if not found and self._scanned:
             empty = Gtk.Label(
-                label="Nothing to clear — your cache is already clean.",
+                label="Cache scan failed. Open Technical output to review the error." if self._scan_failed else "No reclaimable cache reported by this scan.",
                 xalign=0,
                 wrap=True,
                 margin_top=20,
@@ -204,7 +212,7 @@ class CacheCleanerPage(Gtk.Box):
         )
         grand_total = sum(self._category_bytes.values())
         if grand_total == 0:
-            self.total_label.set_label("Nothing to clear" if self._scanned else "—")
+            self.total_label.set_label("Scan needs review" if self._scan_failed else ("Nothing to clear" if self._scanned else "—"))
         else:
             self.total_label.set_label(f"Selected: {human(selected)} of {human(grand_total)} reclaimable")
 
@@ -216,7 +224,7 @@ class CacheCleanerPage(Gtk.Box):
             self._toast_overlay.add_toast(Adw.Toast(title="Nothing to copy yet", timeout=2))
             return
         try:
-            copy_text(self._list_as_text())
+            copy_text(self._list_as_text() + "\n" + export_session(self._reports))
         except Exception as exc:  # noqa: BLE001
             self._toast_overlay.add_toast(Adw.Toast(title=f"Copy failed: {exc}", timeout=3))
             return
@@ -268,6 +276,7 @@ class CacheCleanerPage(Gtk.Box):
         self._set_busy(True)
 
         def on_done(code: int, lines: list[str]) -> bool:
+            self._reports.append(ActivityReport("Cache cleanup", "linux_cache_cleanup.sh --clean --apply --only " + ",".join(categories), lines=list(lines), exit_code=code, finished=True))
             self._set_busy(False)
             message = "Cache cleanup complete" if code == 0 else "Cache cleanup failed"
             self._toast_overlay.add_toast(Adw.Toast(title=message, timeout=3))

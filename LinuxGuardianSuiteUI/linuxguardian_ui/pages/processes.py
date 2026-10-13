@@ -15,8 +15,9 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
+from linuxguardian_ui.reports import ActivityReport
 from linuxguardian_ui.process_help import KEEP_RUNNING, CLOSE_EFFECT, END_HELP, FORCE_HELP, GUIDE
-from linuxguardian_ui.components import page_header, info_banner
+from linuxguardian_ui.components import page_header, info_banner, copy_action, report_window
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.process_catalog import friendly_name  # noqa: E402
@@ -78,6 +79,7 @@ class ProcessesPage(Gtk.Box):
     def __init__(self, toast_overlay: Adw.ToastOverlay) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self._toast_overlay = toast_overlay
+        self._inventory_report = None
         self.add_css_class("process-page")
         self.set_margin_top(24)
         self.set_margin_bottom(16)
@@ -131,6 +133,9 @@ class ProcessesPage(Gtk.Box):
         copy_btn = Gtk.Button(label="Copy All")
         copy_btn.connect("clicked", self._on_copy_all)
         toolbar.append(copy_btn)
+        technical_btn = Gtk.Button(label="Technical report")
+        technical_btn.connect("clicked", lambda _b: report_window(self.get_root(), "Process technical report", self._technical_report()))
+        options.append(technical_btn)
 
         close_all_btn = Gtk.Button(label="Close All Apps")
         close_all_btn.add_css_class("danger-outline")
@@ -196,6 +201,7 @@ class ProcessesPage(Gtk.Box):
 
     def _on_list_done(self, code: int, lines: list[str]) -> bool:
         self._set_busy(False)
+        self._inventory_report = ActivityReport("Process inventory", "linux_process_manager.sh --list", lines=list(lines), finished=True, exit_code=code)
         self._rows = []
         for line in lines:
             line = line.strip()
@@ -382,6 +388,7 @@ class ProcessesPage(Gtk.Box):
 
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=8, margin_start=8)
         expander.set_child(inner)
+        inner.append(copy_action("Copy Group Details", lambda: self._list_as_text(technical=True, group_id=group["id"])))
 
         blurb = Gtk.Label(label=group["blurb"], xalign=0, wrap=True)
         blurb.add_css_class("omega-dim")
@@ -487,6 +494,7 @@ class ProcessesPage(Gtk.Box):
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.END)
         actions.add_css_class("process-actions")
         row.append(actions)
+        actions.append(copy_action("Copy Details", lambda: "LinuxGuardian — process details\n" + json.dumps(proc, indent=2, ensure_ascii=False)))
         group = {
             "comm": proc["comm"],
             "kind": proc.get("kind", "system"),
@@ -607,13 +615,19 @@ class ProcessesPage(Gtk.Box):
             return
         self._toast_overlay.add_toast(Adw.Toast(title="Process list copied", timeout=2))
 
-    def _list_as_text(self) -> str:
+    def _technical_report(self):
+        return self._list_as_text(technical=True) + "\n" + (self._inventory_report.export() if self._inventory_report else "No inventory output captured yet.")
+
+    def _list_as_text(self, technical: bool = False, group_id: str | None = None) -> str:
         sort_field = "mem" if self.sort_dropdown.get_selected() == 1 else "cpu"
         groups = self._groups_from(
             [r for r in self._rows if r.get("group_id") != "kernel"], sort_field
         )
+        if group_id is not None:
+            groups = [g for g in groups if g["id"] == group_id]
         lines = [
             "LinuxGuardian Watchdog — grouped process list",
+            "Scope: all captured non-kernel processes, independent of search/impact filters." if group_id is None else "Scope: selected group.",
             "Please explain each group, whether it is safe to stop, and anything unusual.",
             "Impact: Close app / Feature stops / Desktop affected / Don't kill / Unknown.",
             "Unknown is never assumed safe.",
@@ -633,7 +647,7 @@ class ProcessesPage(Gtk.Box):
                     lines.append(f"  {m['purpose']}")
                 if listen:
                     lines.append(f"  listening: {listen}")
-                if self._advanced():
+                if technical or self._advanced():
                     lines.append(
                         f"  PID {m['pid']} PPID {m.get('ppid')}  exe={m.get('exe')}  "
                         f"origin={m.get('origin')}  parent={m.get('parent_comm')}  "

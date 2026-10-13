@@ -7,6 +7,7 @@ replacement built from plain Gtk.Window so it works everywhere GTK4 does.
 from __future__ import annotations
 
 from collections.abc import Callable
+from linuxguardian_ui.components import copy_action
 
 import gi
 
@@ -108,6 +109,7 @@ def review(
     box.append(button_row)
     close = Gtk.Button(label="Close")
     close.connect("clicked", lambda _b: dialog.close())
+    button_row.append(copy_action("Copy All Details", lambda: "\n".join([heading, summary, "", *[f"{'PASS' if ok else 'REVIEW'} — {item}\n{why}" for ok, item, why in rows]])))
     button_row.append(close)
     if action_label and on_action:
         go = Gtk.Button(label=action_label)

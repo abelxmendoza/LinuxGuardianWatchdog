@@ -10,6 +10,10 @@ from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 from linuxguardian_ui.components import LOGO_FULL, brand_lockup  # noqa: E402
 
 from linuxguardian_ui.pages.apps import AppsPage  # noqa: E402
+from linuxguardian_ui.components import report_window, widget_report
+from linuxguardian_ui.reports import export_session, export_saved_scan, timestamp
+from linuxguardian_ui.scan_history import load_last_scan
+
 from linuxguardian_ui.pages.cache_cleaner import CacheCleanerPage  # noqa: E402
 from linuxguardian_ui.pages.dashboard import DashboardPage  # noqa: E402
 from linuxguardian_ui.pages.exposure import ExposurePage  # noqa: E402
@@ -53,6 +57,27 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
         self.view_stack = stack                  # pages (e.g. the Dashboard's Hardening card) switch tabs through this
         view_switcher.set_stack(stack)
         self.toast_overlay.set_child(stack)
+        report_btn = Gtk.Button(icon_name="edit-copy-symbolic")
+        report_btn.set_tooltip_text("Security report: view and copy all captured page summaries and technical output")
+        def show_report(_button):
+            sections = ["LinuxGuardian — security posture & diagnostics", f"Exported: {timestamp()}",
+                        "Scope: current page snapshots and captured session output. This does not run new checks.",
+                        "Includes local paths, commands, and network details; review before sharing."]
+            for page in stack.get_pages():
+                child = page.get_child()
+                sections.append(widget_report(child, page.get_title()))
+                if hasattr(child, "_reports"):
+                    sections.append(export_session(child._reports))
+                if page.get_name() == "processes":
+                    sections.append(child._technical_report())
+                elif page.get_name() == "updates":
+                    sections.append(child._list_as_text())
+                elif page.get_name() == "cache":
+                    sections.append(child._list_as_text())
+            sections.append(export_saved_scan(load_last_scan()))
+            report_window(self, "Security posture & diagnostics", "\n\n".join(sections))
+        report_btn.connect("clicked", show_report)
+        header.pack_end(report_btn)
 
         dashboard_page = stack.add_titled(DashboardPage(), "dashboard", "Dashboard")
         dashboard_page.set_icon_name("security-high-symbolic")

@@ -20,6 +20,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui import update_catalog as uc  # noqa: E402
+from linuxguardian_ui.components import copy_action, widget_report
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.progress import is_progress_noise, parse_progress_line  # noqa: E402
@@ -185,6 +186,8 @@ class UpdatesPage(Gtk.Box):
         )
         self.append(intro)
 
+        self.append(copy_action("Copy All Page Details", lambda: widget_report(self, "Software updates")))
+
         scroller = Gtk.ScrolledWindow(vexpand=True)
         self.append(scroller)
 
@@ -251,7 +254,10 @@ class UpdatesPage(Gtk.Box):
         tech = Gtk.Expander(label="Technical details (raw installer output)")
         self.run_card.append(tech)
         scroller = Gtk.ScrolledWindow(min_content_height=200)
-        tech.set_child(scroller)
+        raw_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        raw_box.append(copy_action("Copy All Installer Output", lambda: self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), True)))
+        raw_box.append(scroller)
+        tech.set_child(raw_box)
         self.output_view = Gtk.TextView(editable=False, monospace=True)
         self.output_view.set_wrap_mode(Gtk.WrapMode.CHAR)
         scroller.set_child(self.output_view)

@@ -16,4 +16,5 @@ def copy_text(text: str) -> None:
         "text/plain;charset=utf-8",
         GLib.Bytes.new(text.encode("utf-8")),
     )
-    clipboard.set_content(provider)
+    if not clipboard.set_content(provider):
+        raise RuntimeError("desktop clipboard rejected the content")
