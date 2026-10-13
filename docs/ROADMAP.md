@@ -59,8 +59,9 @@ macOS original's feature set:
 - [x] Terminal fallback: every feature as a command with and without the app, opened from a title-bar button filtered to the current tab
 - [x] Self-check and tamper detection (file hashes judged against git, permissions, damaged state with daily snapshots, `self` sensor), crash log and per-tab crash safety
 - [x] Malware cleaner: findings with plain explanations, re-verify, reversible quarantine, restore, confirmed permanent delete
-- [ ] More tripwires on what attackers touch (authorized_keys, sudoers.d, shell start-up, decoy SSH key and .env) with critical alerts
-- [ ] Attack coverage map: which common techniques (MITRE ATT&CK) the sensors cover, partly cover or miss, and a "malware you might meet on Linux" explainer
+- [x] Tripwires on what attackers touch (authorized_keys, sudo/PAM/polkit/sshd, hosts, kernel modules, apt sources and hooks, pip/npm/cargo/git) and opt-in decoy SSH key / AWS credentials / .env
+- [x] Attack coverage map (MITRE ATT&CK, checked against the code) and a "malware you might meet on Linux" explainer
+- [ ] Close the biggest gaps the map names: setuid inventory, log-wipe detection, instant alert when ufw/freshclam/monitoring is stopped, ransomware burst tripwire + backup check, sustained CPU/GPU alert
 - [ ] AI: optional daily triage digest (ranks open incidents), project-aware context (which ROS nodes you run)
 - [ ] Threat intel: domain/DNS lists, and checking listening-port peers (not only established outbound connections)
 - [ ] Hardening: backup check (is there a recent snapshot?), outbound connection visibility, DNS-over-TLS toggle

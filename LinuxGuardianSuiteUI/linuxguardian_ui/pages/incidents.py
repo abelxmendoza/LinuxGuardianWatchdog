@@ -19,6 +19,7 @@ from linuxguardian_ui.clipboard import copy_text  # noqa: E402
 from linuxguardian_ui.components import copy_action, widget_report, page_header, section_header  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
 from linuxguardian_ui.pages.ai_dialogs import AiSettingsWindow, InvestigationWindow  # noqa: E402
+from linuxguardian_ui.pages.coverage_view import CoverageView  # noqa: E402
 from linuxguardian_ui.pages.timeline import TimelinePage  # noqa: E402
 from linuxguardian_ui.scripts import run_sync_async  # noqa: E402
 
@@ -131,6 +132,7 @@ class IncidentsView(Gtk.Box):
             self.status_card.append(_label(f"Learning what's normal on this laptop until {_when(s['learning_until'])}. During this time the network "
                                            "sensor stays quiet so it doesn't cry wolf; the others already alert.", "omega-warning"))
         self._render_intel(s.get("threat_intel") or {})
+        self._render_decoys(s.get("decoys") or {})
         problems = [x for x in sensors if x["ok"] is False]
         if problems:
             ex = Gtk.Expander(label=f"{len(problems)} sensor(s) can't work fully")
@@ -156,6 +158,33 @@ class IncidentsView(Gtk.Box):
             off.connect("clicked", self._on_intel_off)
             row.append(off)
         self.status_card.append(row)
+
+    def _render_decoys(self, d: dict) -> None:
+        """One row for the decoy files (fake secrets that raise a critical alert if something opens them)."""
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        planted = bool(d.get("planted"))
+        row.append(_label("Decoy files: " + (d.get("text") or "unavailable"), "omega-heading" if planted else "omega-dim"))
+        row.get_first_child().set_hexpand(True)
+        if planted:
+            off = Gtk.Button(label="Remove decoys")
+            off.connect("clicked", lambda _b: confirm(self.get_root(), "Remove the decoy files?", "Only the fake files LinuxGuardian planted are removed, "
+                        "and only if they are unchanged.", "Remove", lambda: run_sync_async("decoys.py", ["--remove"], lambda c, l: (self._toast(l[-1] if l else "Removed"), self.refresh()),
+                                                                                           timeout=30.0), destructive=False))
+            row.append(off)
+        else:
+            btn = Gtk.Button(label="Plant decoys…")
+            btn.set_tooltip_text("Plants a fake SSH key, fake cloud credentials and a fake .env file. If anything opens them you get a critical alert.")
+            btn.connect("clicked", self._on_plant_decoys)
+            row.append(btn)
+        self.status_card.append(row)
+
+    def _on_plant_decoys(self, _btn: Gtk.Button) -> None:
+        confirm(self.get_root(), "Plant decoy files?",
+                "Three clearly fake files are created where an intruder looks for secrets: ~/.ssh/old_deploy_key, ~/.aws/credentials.bak and ~/.env.production.bak. "
+                "They unlock nothing. If a program or person opens one, you get a critical alert (backup tools and file indexers can also trigger it, and "
+                "LinuxGuardian's own scans are ignored). It can't say which program did it.\n\nNothing real is touched; a file that already has one of those names is left alone.",
+                "Plant decoys", lambda: run_sync_async("decoys.py", ["--create"], lambda c, l: (self._toast(l[0] if l else "Done"), self.refresh()), timeout=30.0),
+                destructive=False)
 
     def _on_enable_intel(self, btn: Gtk.Button) -> None:
         confirm(self.get_root(), "Check connections against known-bad addresses?",
@@ -342,8 +371,11 @@ class InvestigatePage(Gtk.Box):
         self.inc_btn = Gtk.ToggleButton(label="Incidents", active=True)
         self.tl_btn = Gtk.ToggleButton(label="All events (timeline)")
         self.tl_btn.set_group(self.inc_btn)
+        self.cov_btn = Gtk.ToggleButton(label="What it can notice")
+        self.cov_btn.set_group(self.inc_btn)
         switch.append(self.inc_btn)
         switch.append(self.tl_btn)
+        switch.append(self.cov_btn)
         self.stack = Gtk.Stack(vexpand=True)
         self.append(self.stack)
         self.append(copy_action("Copy All Page Details", lambda: widget_report(self, "Security incidents")))
@@ -357,5 +389,11 @@ class InvestigatePage(Gtk.Box):
         for side in ("top", "bottom", "start", "end"):                 # the embedded timeline brings its own page margins
             getattr(self.timeline, f"set_margin_{side}")(0)
         self.stack.add_named(self.timeline, "timeline")
+        cov_scroller = Gtk.ScrolledWindow(vexpand=True)
+        cov_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.coverage = CoverageView()
+        cov_scroller.set_child(self.coverage)
+        self.stack.add_named(cov_scroller, "coverage")
+        self.cov_btn.connect("toggled", lambda b: b.get_active() and (self.coverage.refresh(), self.stack.set_visible_child_name("coverage")))
         self.inc_btn.connect("toggled", lambda b: b.get_active() and self.stack.set_visible_child_name("incidents"))
         self.tl_btn.connect("toggled", lambda b: b.get_active() and self.stack.set_visible_child_name("timeline"))

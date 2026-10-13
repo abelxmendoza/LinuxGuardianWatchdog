@@ -13,6 +13,8 @@ Incidents and notifications already understand. No AI here: every rule is plain,
   usb        new USB devices, especially keyboard-like ones that also pretend to be storage
   commands   new programs dropped into ~/.local/bin and friends, or executables dropped in /tmp
   self       LinuxGuardian's own program files changing (hash baseline, judged against git)       (self_check.py)
+  tripwires  new SSH keys, sudo/login rule changes, new software sources, redirected package registries (tripwires.py)
+  decoys     fake SSH key / cloud credentials / .env that were opened, changed or deleted           (decoys.py)
 
 A sensor only records what is NEW since it last ran; the first run just learns what is normal on this laptop, and
 network behaviour is learned for three days before it alerts. Nothing here kills, blocks or changes anything.
@@ -43,6 +45,7 @@ SUITE_DIR = Path(__file__).resolve().parent
 if str(SUITE_DIR) not in sys.path:
     sys.path.insert(0, str(SUITE_DIR))
 
+import decoys  # noqa: E402
 import self_check  # noqa: E402
 import threat_intel  # noqa: E402
 from events import lg_home, record_event  # noqa: E402
@@ -604,6 +607,26 @@ class SensorUnavailable(Exception):
     pass
 
 
+def _as_findings(items: list[dict]) -> list[Finding]:
+    return [Finding(i["key"], i["severity"], i["event"], i["message"], i["entity"], i["technique"], i["stage"], i["extra"]) for i in items]
+
+
+def sensor_tripwires(ctx: Ctx) -> list[Finding]:
+    """Changes to the few settings an attacker edits to stay in or to poison what you install (see tripwires.py)."""
+    import tripwires  # imported here: tripwires is independent of this module and must stay that way
+
+    return _as_findings(tripwires.run(ctx.state))
+
+
+def sensor_decoys(ctx: Ctx) -> list[Finding]:
+    """Planted fake secrets that were read, changed or deleted (see decoys.py). Quiet unless you planted decoys."""
+    out = []
+    for f in decoys.check():
+        sev = "critical"
+        out.append(Finding(f["key"], sev, f["event"], decoys.message(f), [f["path"]], "T1552.001", "credential", {"path": f["path"], "decoy": True}))
+    return out
+
+
 def sensor_self(ctx: Ctx) -> list[Finding]:
     """The app watching itself: a changed or unexpected program file is reported like any other persistence attempt."""
     out = []
@@ -616,7 +639,8 @@ def sensor_self(ctx: Ctx) -> list[Finding]:
 
 
 SENSORS = {"auth": sensor_auth, "processes": sensor_processes, "network": sensor_network, "autoruns": sensor_autoruns,
-           "accounts": sensor_accounts, "usb": sensor_usb, "commands": sensor_commands, "self": sensor_self}
+           "accounts": sensor_accounts, "usb": sensor_usb, "commands": sensor_commands, "self": sensor_self,
+           "tripwires": sensor_tripwires, "decoys": sensor_decoys}
 DESCRIPTIONS = {
     "auth": "Login history: failed logins, new accounts, sensitive sudo use",
     "processes": "Running programs: from /tmp, deleted, or pretending to be the kernel",
@@ -626,6 +650,8 @@ DESCRIPTIONS = {
     "usb": "New USB devices (keyboard-like devices that also act as storage)",
     "commands": "New command-line programs and executables dropped in /tmp",
     "self": "LinuxGuardian's own files: changed, added or opened up to other users",
+    "tripwires": "Settings attackers change: SSH keys, sudo rules, login rules, software sources, package registries",
+    "decoys": "Fake secrets planted for intruders to find (only if you planted them)",
 }
 
 
@@ -682,7 +708,7 @@ def status() -> dict:
     return {
         "active": bool(state.get("last_run")), "timer": timer_enabled(), "first_run": fr, "last_run": state.get("last_run"),
         "learning_until": (fr + LEARN_SECONDS) if fr else None, "learning": bool(fr and (t - fr) < LEARN_SECONDS),
-        "threat_intel": threat_intel.status(),
+        "threat_intel": threat_intel.status(), "decoys": decoys.status(),
         "sensors": [{"name": n, "description": DESCRIPTIONS[n], "ok": last.get(n, {}).get("ok", None), "error": last.get(n, {}).get("error", "")} for n in SENSORS],
     }
 

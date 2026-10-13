@@ -81,16 +81,29 @@ def roots() -> list[Path]:
     return [p for p in candidates if p.exists()]
 
 
+def decoy_files() -> set[Path]:
+    """Planted decoy secrets: reading one to hash it would look exactly like someone stealing it, so they are never opened here."""
+    try:
+        import decoys
+
+        return set(decoys.paths(home()))
+    except Exception:  # noqa: BLE001 - integrity must work without the decoy module
+        return set()
+
+
 def excluded(path: str) -> bool:
     """Would `iter_files` have skipped this path? (Used to read baselines made by older versions.)"""
     p = Path(path)
     hp = honeypot_dir()
-    return any(part in SKIP_DIRS for part in p.parts) or p == hp or hp in p.parents
+    return any(part in SKIP_DIRS for part in p.parts) or p == hp or hp in p.parents or p in decoy_files()
 
 
 def iter_files(root_list: list[Path]):
     hp = honeypot_dir()
+    decoys = decoy_files()
     for root in root_list:
+        if root in decoys:
+            continue
         if root.is_file() or root.is_symlink():
             yield root
             continue
@@ -99,7 +112,7 @@ def iter_files(root_list: list[Path]):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and here / d != hp]
             for name in filenames:
                 path = here / name
-                if path.is_symlink():
+                if path.is_symlink() or path in decoys:
                     continue
                 yield path
 

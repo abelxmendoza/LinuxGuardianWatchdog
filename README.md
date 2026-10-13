@@ -65,6 +65,10 @@ LinuxGuardianWatchdog/
 │   ├── threat_intel.py          # Known-bad address lists (free, no account) checked against connections
 │   ├── fallback.py              # Every feature as a copyable/openable terminal command (with and without the app)
 │   ├── self_check.py            # The app checking itself: file hashes vs git, permissions, damaged state, upkeep
+│   ├── tripwires.py             # SSH keys, sudo/login rules, software sources, package registries: change = alert
+│   ├── decoys.py                # Fake SSH key / cloud credentials / .env that raise an alert if opened
+│   ├── attack_coverage.py       # Honest map: which common attacks are covered, partly covered, or not
+│   ├── malware_guide.py         # Explainer: kinds of Linux malware, how to recognise them
 │   ├── quarantine.py            # Malware cleaner: re-verify, quarantine reversibly, restore, delete on request
 │   ├── incidents.py             # Groups sensor events into explained incidents
 │   ├── evidence.py              # Read-only evidence bundle for an incident
@@ -123,6 +127,9 @@ cd LinuxGuardianSuite
 ./threat_intel.py --update                 # download the free known-bad address lists (and turn the check on)
 ./self_check.py --check                    # is LinuxGuardian itself intact, private and still watching?
 ./quarantine.py --findings                 # what the last scan flagged (--quarantine PATH, --restore ID, --delete ID)
+./tripwires.py --check                     # did an SSH key, sudo rule, login rule or package registry just change?
+./decoys.py --create                       # plant fake secrets that alert if anything opens them (--status, --remove)
+./attack_coverage.py --gaps                # what the sensors can and can't notice, and what to build next
 ./fallback.py --list                       # every feature as a plain terminal command (--open ID opens it in a terminal)
 ./incidents.py                             # related events grouped into plain-language incidents
 ./evidence.py --incident ID                # read-only evidence bundle for an incident

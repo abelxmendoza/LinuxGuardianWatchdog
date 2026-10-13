@@ -405,7 +405,7 @@ def test_the_sensor_stays_quiet_when_nothing_changed_and_works_with_an_empty_tre
     at(monkeypatch, 4 * DAY)
     sn.run_once()
     assert sensor_events(box) == []
-    assert sn.status()["sensors"][-1]["name"] == "self"
+    assert "self" in [s["name"] for s in sn.status()["sensors"]]
 
 
 def test_daily_upkeep_runs_from_the_sensors(box, monkeypatch):

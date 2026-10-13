@@ -31,7 +31,7 @@ from events import SEVERITIES, incident_dir  # noqa: E402
 
 RANK = {"info": 0, "warning": 1, "critical": 2}
 LINK_GAP = 2 * 3600                       # events about the same thing this close together are one story
-SEED_EVENTS = {"file_new_persistence", "honeypot_read", "honeypot_modified"}
+SEED_EVENTS = {"file_new_persistence", "honeypot_read", "honeypot_modified", "decoy_read", "decoy_modified", "decoy_deleted"}
 SEED_CATEGORIES = {"sensor", "malware"}
 INTERPRETERS = {"python", "python2", "python3", "node", "nodejs", "bash", "sh", "dash", "zsh", "perl", "ruby", "java", "php", "env"}
 
@@ -105,6 +105,28 @@ def cluster(obs: list[Obs]) -> list[list[Obs]]:
 
 # (events that must ALL be present) -> title, why it matters, why it is often harmless, what to check
 STORIES: list[tuple[frozenset, str, str, str, list[str]]] = [
+    (frozenset({"tripwire_ssh_key_added"}), "A new SSH key can log in as you",
+     "A key was added to ~/.ssh/authorized_keys. Whoever holds the matching private key can log in as you without a password, for as long as the line stays. "
+     "Adding one is the classic way to keep access after a break-in.",
+     "You or a tool you use (a cloud setup script, ssh-copy-id, Ansible) may have added it on purpose.",
+     ["cat ~/.ssh/authorized_keys and look for a key you don't recognise", "Is SSH reachable from outside? See the Exposure tab", "Remove the line, then check who else logged in: last -n 20"]),
+    (frozenset({"decoy_read"}), "Someone opened a decoy file",
+     "A fake secret that nothing legitimate ever opens was read. A program or person is searching your files for SSH keys, cloud credentials or passwords.",
+     "Backup tools, file indexers and some sync programs read everything. LinuxGuardian's own scans are already ignored.",
+     ["Which program read it? Check the Processes tab and recent logins", "Is a backup or sync tool running right now?", "If you can't explain it, treat the real keys in ~/.ssh and ~/.aws as exposed"]),
+    (frozenset({"decoy_modified"}), "A decoy file was changed",
+     "Nothing legitimate edits the fake secrets. Something is tampering with files in your home.", "Rare.", ["Check what ran recently: ps aux --sort=start_time | tail"]),
+    (frozenset({"decoy_deleted"}), "A decoy file was deleted",
+     "Something removed a fake secret, which is what cleanup tools or an attacker covering their tracks do.", "You may have deleted it yourself.",
+     ["Did you remove it? If not, check recent activity in the Timeline"]),
+    (frozenset({"tripwire_risky_setting"}), "A setting that weakens security was introduced",
+     "A security-relevant setting changed in a file attackers commonly edit: login rules, SSH, software sources or package registries.",
+     "Following a tutorial or installing a tool (a VPN, a cloud agent, a private package index) can change these on purpose.",
+     ["tripwires.py --check shows the exact change", "Did you install or configure something just before this?", "Undo it if you don't recognise it"]),
+    (frozenset({"tripwire_changed"}), "A security-relevant file changed",
+     "A file that is rarely edited, and that controls access or what gets installed, changed or appeared.",
+     "Package updates change some of these routinely (those are marked as such), and so does your own configuration.",
+     ["tripwires.py --check shows which file", "If a package owns it, it was probably an update", "If nobody owns it and you didn't make the change, investigate"]),
     (frozenset({"app_tampered"}), "LinuxGuardian's own files were tampered with",
      "A new program file appeared in the app, or a file anyone can write to changed. Code in the app runs as you every few minutes, so changing it "
      "is a way to hide or to stay.", "A half-finished update or a copy of the app made by someone else on this laptop can look the same.",

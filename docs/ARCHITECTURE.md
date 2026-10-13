@@ -171,6 +171,30 @@ nothing is silenced or allow-listed, and nothing executes after the model answer
 model `claude-opus-5-5`, JSON-schema structured output, no tools, no sampling parameters, and the server-side `fallbacks` beta
 requested by default with automatic degradation to a plain request if the beta isn't accepted.
 
+### Tripwires, decoys and the coverage map
+
+`tripwires.py` watches the handful of settings an attacker changes to stay in or to poison what you install, and reports a
+change within minutes (it runs inside the 5-minute sensors): a new key in `~/.ssh/authorized_keys` (critical; only a hash of
+each key is stored), sudo rules (root-only files, judged by size and timestamp, never read), SSH server settings (empty
+passwords, root login), SSH client commands, PAM rules that accept everyone or run programs, polkit, `/etc/hosts` redirects,
+boot-time kernel modules, login environment and library paths, apt sources/keys and update hooks that run commands, and
+pip/npm/cargo/git settings that redirect where code comes from (credentials in URLs are reduced to the host). The first look only
+learns; a change is reported once; a file a package installed or changed is information, not an alert.
+
+`decoys.py` plants three clearly fake secrets (an SSH key, AWS credentials, a `.env`) and raises a **critical** alert if one is
+read, changed or deleted. Reads are seen through the file's access time: the decoy is armed with an access time older than its
+modification time so the next read bumps it, then re-armed. Honest limits, shown in the UI: it only works if the filesystem
+records access times (tested on your disk), it can't say which program read it, and backup tools can also trigger it. Our own
+scans and integrity checks never open the decoys, and reads during one of them are ignored. Removing decoys deletes only files
+that are still exactly what was planted (inode numbers get reused, so size and timestamp are checked too).
+
+`attack_coverage.py` ("What it can notice" under Incidents) is the honest answer to "check for every attack": 46 common
+techniques named with MITRE ATT&CK ids, each marked covered, partly, turned off, or not covered, with what is missing and what
+would help. It can't drift into marketing: tests check that every sensor, file and technique id an entry claims really exists
+in the code, and that every technique the sensors emit appears on the map. `malware_guide.py` (Malware tab) is an explainer of
+the kinds of malware you might meet, not a signature list (ClamAV already has the real ones), and its claims are checked the
+same way.
+
 ### Free known-bad addresses (threat intelligence)
 
 `threat_intel.py` checks every established outbound connection against two free public lists that need no account:
