@@ -230,6 +230,9 @@ do_scan() {
   clam_report="$report_dir/clamscan-$stamp.log"
   rk_report="$report_dir/rkhunter-$stamp.log"
 
+  # Dead-man's switch: this scan runs from a different timer than the live monitor, so it can say so if the monitor was switched off.
+  python3 "$SCRIPT_DIR/self_check.py" --heartbeat >/dev/null 2>&1 || true
+
   local exclude
   exclude="$(_lg_exclude_regex)"
   lg_info "Malware/rootkit scan of $target started (${SCAN_STYLE}$([ "$CHANGED" -eq 1 ] && echo ', changed-only'))."

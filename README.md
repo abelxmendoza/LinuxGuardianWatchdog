@@ -66,6 +66,8 @@ LinuxGuardianWatchdog/
 │   ├── fallback.py              # Every feature as a copyable/openable terminal command (with and without the app)
 │   ├── self_check.py            # The app checking itself: file hashes vs git, permissions, damaged state, upkeep
 │   ├── tripwires.py             # SSH keys, sudo/login rules, software sources, package registries: change = alert
+│   ├── defenses.py              # Firewall / virus updater / AppArmor switched off after being on
+│   ├── setuid_watch.py          # New or changed setuid/setgid programs (way back to administrator rights)
 │   ├── decoys.py                # Fake SSH key / cloud credentials / .env that raise an alert if opened
 │   ├── attack_coverage.py       # Honest map: which common attacks are covered, partly covered, or not
 │   ├── malware_guide.py         # Explainer: kinds of Linux malware, how to recognise them
@@ -128,6 +130,9 @@ cd LinuxGuardianSuite
 ./self_check.py --check                    # is LinuxGuardian itself intact, private and still watching?
 ./quarantine.py --findings                 # what the last scan flagged (--quarantine PATH, --restore ID, --delete ID)
 ./tripwires.py --check                     # did an SSH key, sudo rule, login rule or package registry just change?
+./defenses.py --check                      # is the firewall (and the other protections) on, and was anything switched off?
+./setuid_watch.py --check                  # new or changed setuid programs (also run every six hours by the live monitor)
+./self_check.py --heartbeat                # dead-man's switch: warn if live monitoring was switched off (the daily scan runs this)
 ./decoys.py --create                       # plant fake secrets that alert if anything opens them (--status, --remove)
 ./attack_coverage.py --gaps                # what the sensors can and can't notice, and what to build next
 ./fallback.py --list                       # every feature as a plain terminal command (--open ID opens it in a terminal)

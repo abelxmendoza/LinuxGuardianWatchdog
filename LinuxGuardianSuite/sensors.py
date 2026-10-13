@@ -15,6 +15,8 @@ Incidents and notifications already understand. No AI here: every rule is plain,
   self       LinuxGuardian's own program files changing (hash baseline, judged against git)       (self_check.py)
   tripwires  new SSH keys, sudo/login rule changes, new software sources, redirected package registries (tripwires.py)
   decoys     fake SSH key / cloud credentials / .env that were opened, changed or deleted           (decoys.py)
+  defenses   the firewall, the virus-definition updater or AppArmor being switched off              (defenses.py)
+  setuid     a new setuid/setgid program, the classic way back to administrator rights              (setuid_watch.py)
 
 A sensor only records what is NEW since it last ran; the first run just learns what is normal on this laptop, and
 network behaviour is learned for three days before it alerts. Nothing here kills, blocks or changes anything.
@@ -618,6 +620,20 @@ def sensor_tripwires(ctx: Ctx) -> list[Finding]:
     return _as_findings(tripwires.run(ctx.state))
 
 
+def sensor_defenses(ctx: Ctx) -> list[Finding]:
+    """A protection that was on and went off: the firewall, the virus updater, AppArmor (see defenses.py)."""
+    import defenses
+
+    return _as_findings(defenses.run(ctx.state))
+
+
+def sensor_setuid(ctx: Ctx) -> list[Finding]:
+    """A new program that runs with someone else's rights (see setuid_watch.py). Walks the disk, so it runs every six hours."""
+    import setuid_watch
+
+    return _as_findings(setuid_watch.run(ctx.state, allow=list(ctx.allow.get("exe", []))))
+
+
 def sensor_decoys(ctx: Ctx) -> list[Finding]:
     """Planted fake secrets that were read, changed or deleted (see decoys.py). Quiet unless you planted decoys."""
     out = []
@@ -640,7 +656,7 @@ def sensor_self(ctx: Ctx) -> list[Finding]:
 
 SENSORS = {"auth": sensor_auth, "processes": sensor_processes, "network": sensor_network, "autoruns": sensor_autoruns,
            "accounts": sensor_accounts, "usb": sensor_usb, "commands": sensor_commands, "self": sensor_self,
-           "tripwires": sensor_tripwires, "decoys": sensor_decoys}
+           "tripwires": sensor_tripwires, "decoys": sensor_decoys, "defenses": sensor_defenses, "setuid": sensor_setuid}
 DESCRIPTIONS = {
     "auth": "Login history: failed logins, new accounts, sensitive sudo use",
     "processes": "Running programs: from /tmp, deleted, or pretending to be the kernel",
@@ -652,6 +668,8 @@ DESCRIPTIONS = {
     "self": "LinuxGuardian's own files: changed, added or opened up to other users",
     "tripwires": "Settings attackers change: SSH keys, sudo rules, login rules, software sources, package registries",
     "decoys": "Fake secrets planted for intruders to find (only if you planted them)",
+    "defenses": "Protections switched off: the firewall, the virus-definition updater, AppArmor",
+    "setuid": "New programs that run with someone else's rights (checked every six hours)",
 }
 
 
@@ -694,6 +712,8 @@ def run_once() -> dict:
         except Exception:  # noqa: BLE001 - upkeep must never silence the sensors
             pass
         state["last_maintain"] = t
+    if timer_enabled():
+        state["timer_seen"] = True                              # live monitoring has really been in use: the dead-man's switch may rely on it
     state["last_run"] = t
     state["last_report"] = {k: v for k, v in report.items() if k != "sensors"} | {"sensors": {n: {"ok": i["ok"], "error": i["error"]} for n, i in report["sensors"].items()}}
     save_state(state)

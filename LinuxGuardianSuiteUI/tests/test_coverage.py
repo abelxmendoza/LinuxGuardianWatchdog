@@ -16,7 +16,7 @@ import attack_coverage as cv  # noqa: E402
 import malware_guide as mg  # noqa: E402
 import sensors  # noqa: E402
 
-EMITTERS = ("sensors.py", "tripwires.py", "decoys.py")
+EMITTERS = ("sensors.py", "tripwires.py", "decoys.py", "defenses.py", "setuid_watch.py")
 
 
 def emitted_ids() -> set[str]:
@@ -83,7 +83,7 @@ def test_effective_state_reflects_what_is_switched_off():
     assert off["T1098.004"]["effective"] == "off" and "live monitoring" in off["T1098.004"]["off_text"][0]
     assert off["T1552.001"]["effective"] == "off" and len(off["T1552.001"]["off_text"]) == 2
     assert off["T1133"]["effective"] == "covered"                          # needs nothing switched on
-    assert off["T1548.001"]["effective"] == "none"                         # nothing to switch on for a gap
+    assert off["T1070.002"]["effective"] == "none"                         # nothing to switch on for a gap
     unknown = {r["id"]: r for r in cv.evaluate({"timer": None, "threat_intel": None, "decoys": None})}
     assert unknown["T1098.004"]["effective"] == "covered"                  # unknown is not reported as off
 

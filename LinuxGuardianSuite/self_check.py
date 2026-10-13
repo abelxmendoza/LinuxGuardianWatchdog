@@ -19,6 +19,7 @@ accidents, half-finished updates and unsophisticated tampering, and the sensors 
   self_check.py --plan REPAIR             show exactly what a repair would change (changes nothing)
   self_check.py --apply REPAIR            do it.   REPAIR: perms | app_perms | accept | state:NAME
   self_check.py --maintain                daily upkeep: snapshot state files, rotate the log, prune old snapshots
+  self_check.py --heartbeat               dead-man's switch: warn if live monitoring was switched off or stopped (the daily scan runs this)
 
 Test hooks: LG_HOME, LG_APP_ROOT, LG_SELF_NOW.
 """
@@ -533,6 +534,47 @@ def maintain() -> dict:
     return done
 
 
+# ================================================== dead-man's switch
+HEARTBEAT_STALE = 6 * 3600           # the daily scan raises this if the 5-minute monitor hasn't run for six hours
+HEARTBEAT_COOLDOWN = 24 * 3600
+
+
+def heartbeat() -> dict | None:
+    """Run by a DIFFERENT unit (the daily scan), so it still speaks if the live monitor was switched off or killed.
+
+    Only speaks if live monitoring has really been in use (its timer was seen enabled), never to nag someone who didn't turn it on.
+    Records a warning event (at most once a day) and returns it, or returns None.
+    """
+    try:
+        state = json.loads(state_path("sensors").read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(state, dict) or not state.get("timer_seen"):
+        return None
+    timer = _run(["systemctl", "--user", "is-enabled", "linuxguardian-sensors.timer"]) == "enabled" if shutil.which("systemctl") else None
+    last = state.get("last_run")
+    age = None if last is None else now() - last
+    if timer is False:
+        problem = "Live monitoring was switched off: its timer is no longer enabled, so nothing is watching for attacks between scans."
+    elif age is not None and age > HEARTBEAT_STALE:
+        problem = f"Live monitoring hasn't run for {int(age // 3600)} hours, so nothing is watching for attacks. It may have been stopped."
+    else:
+        return None
+    hb = lg_home() / "state" / "self_heartbeat.json"
+    try:
+        last_alert = json.loads(hb.read_text()).get("time", 0)
+    except (OSError, json.JSONDecodeError):
+        last_alert = 0
+    if now() - last_alert < HEARTBEAT_COOLDOWN:
+        return None
+    from events import record_event
+
+    record_event("selfcheck", "warning", "monitoring_stopped", problem + " Turn it back on from the Incidents tab, or: systemctl --user enable --now linuxguardian-sensors.timer",
+                 technique="T1562.001")
+    _write_private(hb, json.dumps({"time": now()}))
+    return {"event": "monitoring_stopped", "message": problem}
+
+
 # ================================================================= CLI
 def render_text(r: dict) -> str:
     mark = {"ok": "ok  ", "info": "info", "warning": "WARN", "critical": "CRIT"}
@@ -552,6 +594,7 @@ def main() -> int:
     g.add_argument("--plan", metavar="REPAIR")
     g.add_argument("--apply", metavar="REPAIR")
     g.add_argument("--maintain", action="store_true")
+    g.add_argument("--heartbeat", action="store_true")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
     try:
@@ -563,6 +606,9 @@ def main() -> int:
             print(json.dumps(p) if a.json else "\n".join([p["title"], *[f"  - {s}" for s in p["steps"]], p["note"]]))
         elif a.apply:
             print(apply(a.apply))
+        elif a.heartbeat:
+            r = heartbeat()
+            print(json.dumps(r) if a.json else (r["message"] if r else "Live monitoring is fine (or was never turned on)."))
         else:
             r = maintain()
             print(json.dumps(r) if a.json else f"Backed up {r['backed_up']} file(s); log rotated: {r['rotated']}; old snapshots removed: {r['pruned']}.")

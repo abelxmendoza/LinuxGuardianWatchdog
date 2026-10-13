@@ -49,6 +49,11 @@ def box(tmp_path, monkeypatch):
     monkeypatch.setenv("LG_GROUP", str(t / "group"))
     monkeypatch.setenv("LG_USB", str(t / "usb"))
     monkeypatch.setenv("LG_SENSOR_NOW", str(T0))
+    stub(t / "bin", "systemctl", 'echo "LoadState=not-found"; exit 0')                # no services exist in the test world
+    (t / "suroots").mkdir()
+    monkeypatch.setenv("LG_SETUID_ROOTS", str(t / "suroots"))                           # the setuid sensor walks a throwaway tree, not this machine
+    monkeypatch.setenv("LG_UFW_CONF", str(t / "ufw.conf"))
+    monkeypatch.setenv("LG_UFW_DEFAULT", str(t / "ufw.default"))
     (t / "approot").mkdir()
     monkeypatch.setenv("LG_APP_ROOT", str(t / "approot"))             # the app-integrity sensor watches a throwaway tree, not this checkout
     return t
@@ -430,9 +435,9 @@ def test_cli_run_and_status(box):
     import subprocess
     env = dict(os.environ)
     out = subprocess.run([sys.executable, str(ROOT / "LinuxGuardianSuite" / "sensors.py"), "--run"], capture_output=True, text=True, env=env)
-    assert out.returncode == 0 and "10 of 10 working" in out.stdout
+    assert out.returncode == 0 and "12 of 12 working" in out.stdout
     st = json.loads(subprocess.run([sys.executable, str(ROOT / "LinuxGuardianSuite" / "sensors.py"), "--status", "--json"], capture_output=True, text=True, env=env).stdout)
-    assert st["active"] and len(st["sensors"]) == 10
+    assert st["active"] and len(st["sensors"]) == 12
 
 
 def test_expected_programs_can_be_allowed_and_broad_paths_cannot(box, monkeypatch):

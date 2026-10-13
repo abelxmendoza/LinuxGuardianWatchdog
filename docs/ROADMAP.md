@@ -61,7 +61,8 @@ macOS original's feature set:
 - [x] Malware cleaner: findings with plain explanations, re-verify, reversible quarantine, restore, confirmed permanent delete
 - [x] Tripwires on what attackers touch (authorized_keys, sudo/PAM/polkit/sshd, hosts, kernel modules, apt sources and hooks, pip/npm/cargo/git) and opt-in decoy SSH key / AWS credentials / .env
 - [x] Attack coverage map (MITRE ATT&CK, checked against the code) and a "malware you might meet on Linux" explainer
-- [ ] Close the biggest gaps the map names: setuid inventory, log-wipe detection, instant alert when ufw/freshclam/monitoring is stopped, ransomware burst tripwire + backup check, sustained CPU/GPU alert
+- [x] Gaps closed from the map: setuid/setgid watch, firewall / virus updater / AppArmor switched-off alerts, monitoring dead-man's switch from the daily scan
+- [ ] Remaining gaps the map names: log-wipe detection, ransomware burst tripwire + backup check, sustained CPU/GPU alert, loaded kernel modules check
 - [ ] AI: optional daily triage digest (ranks open incidents), project-aware context (which ROS nodes you run)
 - [ ] Threat intel: domain/DNS lists, and checking listening-port peers (not only established outbound connections)
 - [ ] Hardening: backup check (is there a recent snapshot?), outbound connection visibility, DNS-over-TLS toggle

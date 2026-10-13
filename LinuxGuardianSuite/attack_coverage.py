@@ -88,8 +88,9 @@ ENTRIES = [
     E("T1548.003", "Sudo abuse", "Privilege escalation", "Giving yourself passwordless administrator rights.", "covered",
       "Sensitive sudo use and any change to the sudo rules are reported.", code=["T1548.003"], needs=["timer"]),
     E("T1548", "Weakening prompts for passwords", "Privilege escalation", "Changing polkit rules.", "covered", "polkit rule changes are reported.", code=["T1548"], needs=["timer"]),
-    E("T1548.001", "Setuid programs", "Privilege escalation", "A program that always runs as root.", "none", "Nothing inventories setuid files.",
-      gap="Take a baseline of setuid/setgid files and report new ones.", priority=1),
+    E("T1548.001", "Setuid programs", "Privilege escalation", "A program that always runs as root.", "covered",
+      "Every setuid/setgid program is baselined; a new one is critical in /tmp, your home or under an unexpected owner, and a changed one is flagged (checked every six hours).",
+      code=["T1548.001"], needs=["timer"]),
     E("T1068", "Exploiting a bug to become root", "Privilege escalation", "A kernel or program vulnerability.", "partial",
       "Updates shows pending security fixes and Hardening applies kernel hardening settings. The exploit itself isn't detected.",
       features=["linux_updates.sh", "hardening.py"], gap="No exploit detection."),
@@ -101,8 +102,9 @@ ENTRIES = [
       gap="Watch /var/log/auth.log and the journal for truncation or rotation gaps.", priority=1),
     E("T1055", "Hiding inside another program", "Defense evasion", "Process injection.", "none", "Nothing inspects process memory.", gap="Needs kernel-level tooling (eBPF/auditd).", priority=3),
     E("T1562", "Switching off defenses", "Defense evasion", "Turning off the firewall or the virus updater.", "partial",
-      "Hardening and the health check show the state of the firewall, updater and monitoring when you look; live monitoring that stops is noticed by the health check.",
-      features=["hardening.py", "self_check.py"], gap="No instant alert when ufw or freshclam is stopped.", priority=1),
+      "A firewall switched off or set to accept everything, a stopped firewall service, virus updater or AppArmor is reported within minutes; if live monitoring itself is "
+      "switched off, the daily scan says so.", code=["T1562.004", "T1562.001"], features=["hardening.py", "self_check.py"], needs=["timer"],
+      gap="Only those protections are watched, not rkhunter's schedule or the kernel's own settings.", priority=2),
     E("T1014", "Rootkits", "Defense evasion", "Software that hides itself and others.", "partial", "rkhunter runs on demand with a verified baseline; nothing runs continuously.",
       features=["linux_guardian.sh", "rkhunter_baseline.py"], gap="Not continuous."),
     # ------------------------------------------------------------------------------------ credential access
@@ -129,7 +131,8 @@ ENTRIES = [
     E("T1496", "Cryptomining", "Impact", "Using your CPU/GPU for someone else.", "partial", "The Processes tab shows what is hungry, and malware scans know miner signatures. Nothing watches for sustained CPU/GPU use.",
       features=["linux_process_manager.sh", "linux_guardian.sh"], gap="Alert on sustained unexplained CPU/GPU load (careful: ROS and training legitimately use both).", priority=2),
     E("T1565.001", "Redirecting names", "Impact", "Editing /etc/hosts to send a site elsewhere.", "covered", "Changes to /etc/hosts, apart from loopback entries, are reported.", code=["T1565.001"], needs=["timer"]),
-    E("T1489", "Stopping services", "Impact", "Killing security or backup services.", "none", "Not watched.", gap="Watch the state of ufw, clamav-freshclam and the monitoring timer.", priority=1),
+    E("T1489", "Stopping services", "Impact", "Killing security or backup services.", "partial", "The security services above are watched, and the monitoring timer by the daily scan.",
+      code=["T1562.001"], needs=["timer"], gap="Backup and other services aren't watched.", priority=2),
     E("T1485", "Destroying data", "Impact", "Wiping files or disks.", "none", "Not detected.", gap="Backups are the real defense; add a backup-health check.", priority=2),
 ]
 BY_ID = {e["id"]: e for e in ENTRIES}

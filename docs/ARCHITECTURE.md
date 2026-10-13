@@ -195,6 +195,27 @@ in the code, and that every technique the sensors emit appears on the map. `malw
 the kinds of malware you might meet, not a signature list (ClamAV already has the real ones), and its claims are checked the
 same way.
 
+### Defenses switched off, setuid programs, and the dead-man's switch
+
+`defenses.py` reports a protection that WAS on and then went off: ufw switched off or its default for incoming connections set
+to ACCEPT (critical, at once, since a config file doesn't flap), the ufw service, the ClamAV definitions updater or AppArmor
+stopped (they must stay down for two looks in a row, so a reboot or restart isn't an alarm, and each outage is reported once).
+A protection that was never on, or that was uninstalled, is never an alarm: that is the Hardening tab's business.
+
+`setuid_watch.py` baselines every setuid/setgid program (a setuid program runs as its owner whoever starts it, so an attacker
+without administrator rights hunts for one, and one with it leaves a setuid shell behind). A new one is critical in /tmp, your
+home or under an unexpected owner, a warning in system folders when no package owns it, and information when a package installed
+it; a changed one with no package update is a warning. It walks the disk (about ten seconds here), so it runs at most every six
+hours, one filesystem at a time, skips caches and `node_modules`, resolves merged-`/usr` symlinks so nothing is counted twice,
+opens files without blocking or following links, and treats a look that ran out of time as partial, never as removals. Real
+finding on this laptop: a Jetson SDK root filesystem under `~/nvidia` carries dozens of setuid-root files; they are baselined
+as normal, and a folder can be allow-listed with the usual "this is expected" rule.
+
+The monitor can't report its own death, so `self_check.py --heartbeat` runs from a *different* unit (the daily scan). If live
+monitoring was in use (its timer was seen enabled) and the timer is now off, or it hasn't run for six hours, the scan records a
+warning, at most once a day. It never nags someone who never turned monitoring on. An attacker who disables both timers still
+wins this one; the health window's check is the other line.
+
 ### Free known-bad addresses (threat intelligence)
 
 `threat_intel.py` checks every established outbound connection against two free public lists that need no account:

@@ -105,6 +105,22 @@ def cluster(obs: list[Obs]) -> list[list[Obs]]:
 
 # (events that must ALL be present) -> title, why it matters, why it is often harmless, what to check
 STORIES: list[tuple[frozenset, str, str, str, list[str]]] = [
+    (frozenset({"defense_disabled", "setuid_new"}), "A protection was switched off and a program with elevated rights appeared",
+     "Turning off the firewall or other defenses and leaving a way back to administrator rights are two steps of the same intrusion.",
+     "Rare to be harmless together.", ["sudo ufw status verbose", "systemctl status ufw", "tripwires.py --check and setuid_watch.py --list", "Collect evidence"]),
+    (frozenset({"defense_disabled"}), "A protection was switched off",
+     "The firewall, the virus-definition updater or AppArmor stopped or was turned off. Attackers do this early, so nothing gets in their way or notices them.",
+     "You may have turned it off to troubleshoot something, or an update may have restarted it (a service is only reported if it stays down).",
+     ["sudo ufw status verbose", "systemctl status ufw clamav-freshclam apparmor", "sudo grep -E 'ufw|systemctl' /var/log/auth.log | tail -20",
+      "Turn the firewall back on: sudo ufw enable (check SSH and other services you need are allowed first)"]),
+    (frozenset({"setuid_new"}), "A program that runs with elevated rights appeared",
+     "A setuid program runs as its owner whoever starts it. Attackers who have a way in, but not administrator rights, hunt for these, and ones who get administrator "
+     "rights often leave a setuid copy of a shell behind as a way back.",
+     "Installing a package adds some legitimately (those are marked as such), and so do some vendor tools and unpacked system images like a Jetson SDK root filesystem.",
+     ["ls -l <the file> and sha256sum <the file>", "dpkg -S <the file> says whether a package owns it", "If you don't recognise it: find who created it with stat <the file>, then collect evidence"]),
+    (frozenset({"setuid_changed"}), "A program with elevated rights was modified",
+     "The contents of a setuid program changed and no package update explains it. A modified setuid program runs the attacker's code with the owner's rights.",
+     "A package update changes these routinely (marked as such).", ["dpkg -V <the package>  (or dpkg -S <the file> first)", "sha256sum <the file>", "Reinstall the package: sudo apt reinstall <package>"]),
     (frozenset({"tripwire_ssh_key_added"}), "A new SSH key can log in as you",
      "A key was added to ~/.ssh/authorized_keys. Whoever holds the matching private key can log in as you without a password, for as long as the line stays. "
      "Adding one is the classic way to keep access after a break-in.",
