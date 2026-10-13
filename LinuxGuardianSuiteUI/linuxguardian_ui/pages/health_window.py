@@ -38,7 +38,7 @@ def _clear(box: Gtk.Box) -> None:
 def _parse(lines: list[str]) -> dict:
     try:
         return json.loads("".join(lines))
-    except json.JSONDecodeError:
+    except ValueError:
         return {"error": (lines[-1] if lines else "No answer.").removeprefix("[error]").strip()}
 
 

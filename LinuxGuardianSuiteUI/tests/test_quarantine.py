@@ -200,14 +200,10 @@ def test_quarantine_refuses_its_own_data_directories_and_non_regular_files(box):
 
 def test_quarantine_refuses_files_you_do_not_own_or_cannot_remove(box, monkeypatch):
     f = bad_file(box)
-    real = os.getuid()
-    monkeypatch.setattr(q.os, "getuid", lambda: real + 5)
+    real = os.getuid
+    monkeypatch.setattr(q.os, "getuid", lambda: real() + 5)
     assert "don't own" in q.assess(f)["reason"]
-    monkeypatch.undo()
-    monkeypatch.setenv("PATH", f"{box/'bin'}:/usr/bin:/bin")
-    monkeypatch.setenv("LG_HOME", str(box / "lg"))
-    monkeypatch.setenv("LG_SENSOR_HOME", str(box / "home"))
-    monkeypatch.setenv("LG_SENSOR_ETC", str(box / "etc"))
+    monkeypatch.setattr(q.os, "getuid", real)
     (box / "home/Downloads").chmod(0o500)
     try:
         assert "can't remove" in q.assess(f)["reason"]

@@ -154,7 +154,7 @@ def load_last() -> dict | None:
         return None
     try:
         data = json.loads(LAST_PATH.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
 

@@ -1,7 +1,6 @@
 """AI safety layer: what is removed before anything is shown or sent, and which suggested commands may ever run."""
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -103,7 +102,7 @@ def test_dangerous_ones_are_flagged_as_risky_not_just_unrunnable(cmd):
 
 
 def test_checking_never_raises_on_garbage():
-    for junk in ("\x00", "'unterminated", '"', "a\nb", "‮", "ls " + "x" * 1000, None):
+    for junk in ("\x00", "'unterminated", '"', "a\nb", "\u202e", "ls " + "x" * 1000, None):
         sf.check_command(junk)                                      # type: ignore[arg-type]
 
 

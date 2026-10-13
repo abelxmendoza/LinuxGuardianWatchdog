@@ -246,7 +246,7 @@ def interfaces_from_ip_json(text: str) -> list[dict]:
     """`ip -j addr` -> one entry per address on an UP interface."""
     try:
         data = json.loads(text)
-    except json.JSONDecodeError:
+    except ValueError:
         return []
     found: list[dict] = []
     for link in data:
@@ -551,7 +551,7 @@ def record_new_exposures(services: list[dict]) -> list[Path]:
         previous = json.loads(path.read_text())
         if not isinstance(previous, dict):
             previous = {}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         previous = {}
 
     current: dict[str, str] = {}

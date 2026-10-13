@@ -11,7 +11,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
@@ -51,7 +51,7 @@ def _clear(box: Gtk.Box) -> None:
 def _parse(lines: list[str]) -> dict:
     try:
         return json.loads("".join(lines))
-    except json.JSONDecodeError:
+    except ValueError:
         return {"error": " ".join(lines)[:300] or "No answer."}
 
 

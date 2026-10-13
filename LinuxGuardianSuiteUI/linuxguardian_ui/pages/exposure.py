@@ -111,7 +111,7 @@ class ExposurePage(Gtk.Box):
                 continue
             try:
                 row = json.loads(line)
-            except json.JSONDecodeError:
+            except ValueError:
                 continue
             if row.get("type") == "meta":
                 meta = row

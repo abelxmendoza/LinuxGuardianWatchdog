@@ -304,9 +304,13 @@ def main() -> int:
             os.chmod(path, 0o600)
             print(f"Wrote {path}")
         return 0
+    source = a.plan if a.plan is not None else a.names
+    if not source or not source.strip():
+        print("Give the path of an exported app list.", file=sys.stderr)
+        return 1
     try:
-        manifest = json.loads(Path(a.plan or a.names).expanduser().read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+        manifest = json.loads(Path(source).expanduser().read_text())
+    except (OSError, ValueError) as exc:
         print(f"Can't read that file: {exc}", file=sys.stderr)
         return 1
     problem = validate_manifest(manifest)

@@ -130,7 +130,7 @@ def git_info(root: Path | None = None) -> dict:
 def load_manifest() -> dict | None:
     try:
         d = json.loads(manifest_path().read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     return d if isinstance(d, dict) and isinstance(d.get("files"), dict) else None
 
@@ -299,7 +299,7 @@ def _parses(path: Path) -> bool:
     try:
         json.loads(path.read_text())
         return True
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+    except (OSError, ValueError, UnicodeDecodeError):
         return False
 
 
@@ -344,7 +344,7 @@ def check_allow_list() -> dict:
     p = lg_home() / STATE_FILES["allow"]
     try:
         data = json.loads(p.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {**base, "level": "ok", "text": "Nothing has been allow-listed.", "detail": []}
     exes = [str(e) for e in (data.get("exe") or []) if isinstance(e, str)] if isinstance(data, dict) else []
     home = str(Path.home())
@@ -367,7 +367,7 @@ def check_monitoring() -> dict:
     base = {"id": "monitoring", "title": "Live monitoring", "repair": None}
     try:
         state = json.loads(state_path("sensors").read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         state = {}
     last = state.get("last_run")
     timer = _run(["systemctl", "--user", "is-enabled", "linuxguardian-sensors.timer"]) == "enabled" if shutil.which("systemctl") else None
@@ -397,6 +397,26 @@ def dir_size(path: Path, cap: int = 2_000_000_000) -> int:
     return total
 
 
+def check_data_writable() -> dict:
+    """Can LinuxGuardian actually save what it learns and finds? (A full or read-only disk makes the monitor lose findings.)"""
+    base = {"id": "data_writable", "title": "Saving findings", "repair": None}
+    home = lg_home()
+    probe = home / "state" / f".write-test-{os.getpid()}"
+    try:
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_text("ok")
+    except OSError as exc:
+        why = {28: "the disk is full", 13: "permission denied", 30: "the disk is read-only", 122: "the disk quota is used up"}.get(exc.errno, exc.strerror or "unknown error")
+        return {**base, "level": "warning", "text": f"LinuxGuardian can't write to {home}: {why}. Findings and what it has learned are being lost until this is fixed.",
+                "detail": [f"{type(exc).__name__}: {exc}"]}
+    finally:
+        try:
+            probe.unlink()
+        except OSError:
+            pass
+    return {**base, "level": "ok", "text": "LinuxGuardian can save its findings.", "detail": []}
+
+
 def check_space() -> dict:
     base = {"id": "space", "title": "Disk space used by LinuxGuardian", "repair": None}
     home = lg_home()
@@ -418,7 +438,7 @@ def check_space() -> dict:
 # ============================================================= engine
 def check(create_baseline: bool = True) -> dict:
     checks = [judge_app_files(create=create_baseline), check_app_permissions(), check_data_permissions(), check_state(), check_allow_list(),
-              check_monitoring(), check_space()]
+              check_monitoring(), check_data_writable(), check_space()]
     worst = max(checks, key=lambda c: LEVELS[c["level"]])["level"]
     problems = [c for c in checks if LEVELS[c["level"]] >= LEVELS["warning"]]
     n = len(problems)
@@ -563,7 +583,7 @@ def heartbeat() -> dict | None:
     """
     try:
         state = json.loads(state_path("sensors").read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     if not isinstance(state, dict) or not state.get("timer_seen"):
         return None
@@ -579,7 +599,7 @@ def heartbeat() -> dict | None:
     hb = lg_home() / "state" / "self_heartbeat.json"
     try:
         last_alert = json.loads(hb.read_text()).get("time", 0)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         last_alert = 0
     if now() - last_alert < HEARTBEAT_COOLDOWN:
         return None

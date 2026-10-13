@@ -64,7 +64,7 @@ def load_observations(days: float = 7, directory: Path | None = None, now: float
     for path in directory.glob("*.json"):
         try:
             r = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             continue
         if not isinstance(r, dict) or r.get("severity") not in SEVERITIES or not r.get("message") or r.get("status") == "resolved":
             continue
@@ -269,7 +269,7 @@ def build(days: float = 7, directory: Path | None = None, now: float | None = No
         if RANK[MIN_SEVERITY.get(title, "info")] > RANK[sev]:
             sev = MIN_SEVERITY[title]
         first, last = group[0], group[-1]
-        iid = hashlib.sha1(f"{first.key or first.message}|{int(first.ts)}".encode()).hexdigest()[:10]
+        iid = hashlib.sha1(f"{first.key or first.message}|{int(first.ts)}".encode(), usedforsecurity=False).hexdigest()[:10]
         ents = sorted({e for o in group for e in o.entities})
         inc = Incident(
             iid, title, sev, _confidence(group), first.ts, last.ts, len(group),

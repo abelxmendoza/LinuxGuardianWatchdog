@@ -53,7 +53,7 @@ def default_log() -> Path | None:
         data = json.loads((lg_home() / "scans" / "last.json").read_text())
         report = data.get("rk_report")
         return Path(report) if report else None
-    except (OSError, json.JSONDecodeError, AttributeError):
+    except (OSError, ValueError, AttributeError):
         return None
 
 

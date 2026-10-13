@@ -1,0 +1,8 @@
+# bandit: security linter for Python. These checks are skipped on purpose, each with its reason:
+#   B404/B603/B607  subprocess is the whole design (scripts run other programs); it is never called with shell=True and arguments are lists.
+#                   Dedicated tests (tests/test_security_inputs.py, tests/test_destructive_scripts.py) fuzz every entry point instead.
+#   B108            '/tmp/' and '/dev/shm/' appear as PATTERNS the sensors look for, not as temp files the program creates.
+#   B104            '0.0.0.0' appears as a value the exposure checks recognise, not an address the program binds.
+# Everything else (including medium and high findings) must be clean or carry a justified `# nosec`.
+exclude_dirs: [LinuxGuardianSuiteUI/tests, images, docs]
+skips: [B404, B603, B607, B108, B104]

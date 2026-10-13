@@ -46,7 +46,7 @@ def parse_tailscale(raw: str) -> dict:
     """`tailscale status --json` -> the few facts that matter."""
     try:
         d = json.loads(raw)
-    except json.JSONDecodeError:
+    except ValueError:
         return {"installed": True, "state": "unknown"}
     peers = d.get("Peer") or {}
     me = d.get("Self") or {}
@@ -208,7 +208,7 @@ def dns_owner(links: dict[str, dict]) -> str:
 def public_ip() -> dict:
     """ONE request to Cloudflare's trace page (only when asked). Returns {'ip','loc'} or {'error'}."""
     try:
-        with urllib.request.urlopen("https://1.1.1.1/cdn-cgi/trace", timeout=6) as r:  # noqa: S310 - fixed https URL
+        with urllib.request.urlopen("https://1.1.1.1/cdn-cgi/trace", timeout=6) as r:  # nosec B310  # noqa: S310 - fixed https URL
             body = r.read().decode("ascii", "replace")
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc)[:120]}

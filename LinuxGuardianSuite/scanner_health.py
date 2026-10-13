@@ -89,7 +89,7 @@ def last_scan() -> dict | None:
     path = Path(os.environ.get("LG_HOME", str(Path.home() / ".linuxguardian"))) / "scans" / "last.json"
     try:
         data = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
 

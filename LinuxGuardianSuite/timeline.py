@@ -57,7 +57,7 @@ def _state_path() -> Path:
 def load_acks() -> dict[str, float]:
     try:
         data = json.loads(_state_path().read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
     return {k: float(v) for k, v in data.items()} if isinstance(data, dict) else {}
 
@@ -116,7 +116,7 @@ def load_entries(directory: Path | None = None) -> list[Entry]:
     for path in directory.glob("*.json"):
         try:
             record = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             continue
         if not isinstance(record, dict) or record.get("severity") not in SEVERITIES or not record.get("message"):
             continue

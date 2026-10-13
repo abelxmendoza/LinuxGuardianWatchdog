@@ -48,7 +48,7 @@ def victims():
 
 
 # ----------------------------------------------------------------------------- --kill PID
-@pytest.mark.parametrize("bad", ["", "0", "1", "-1", "-9", "01", "1 2", "abc", "12abc", "$(id)", "`id`", "2;3", "--", "+5", "1e3", " "])
+@pytest.mark.parametrize("bad", ["", "0", "1", "-1", "-9", "01", "1 2", "abc", "12abc", "$(id)", "`id`", "2;3", "--", "+5", "1e3", " ", "999999999999", "12345678", "4194305000"])
 def test_kill_refuses_anything_that_is_not_one_ordinary_process_id(tmp_path, bad):
     r, calls = run_pm(tmp_path, "--kill", bad)
     assert calls == [], f"signalled {calls!r} for {bad!r}"
@@ -86,7 +86,7 @@ def test_a_real_kill_really_ends_a_real_victim(tmp_path, victims):
 
 
 # ------------------------------------------------------------------------ --kill-name NAME
-@pytest.mark.parametrize("bad", ["", " ", "a", "ab", "..", ".*", "...", "^$", "*", "- -", "---"])
+@pytest.mark.parametrize("bad", ["", " ", "a", "ab", "..", ".*", "...", "^$", "*", "- -", "---", "-rf", "a-b", "x.y", "[a]", "^a$"])
 def test_kill_by_name_refuses_empty_tiny_or_wildcard_only_names(tmp_path, bad):
     """`pgrep -f ""` matches nearly every process on the machine: that was a one-argument way to signal all of them."""
     r, calls = run_pm(tmp_path, "--kill-name", bad)

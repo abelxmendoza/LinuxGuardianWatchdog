@@ -13,9 +13,10 @@ remediation — orchestrated by a native desktop app, with all data kept local
 to the machine. The GUI also carries over the original's dark "Omega
 Black-Ops" theme (purple/red/yellow accents on near-black).
 
-> **Status: scaffold / early bootstrap.** This is the initial skeleton —
-> directory layout, a working core script or two, and a minimal native UI
-> shell. It is not yet feature-complete. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: personal-use release candidate, not a distribution.** Everything below is implemented and tested (see
+> [docs/TESTING.md](docs/TESTING.md) and [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) for what is and isn't verified). It is run from a
+> checkout of this repository on Ubuntu 22.04 (GNOME on X11), not installed from a package. It reduces risk and makes problems visible;
+> it does **not** guarantee protection against malware or attacks. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Architecture
 
@@ -92,11 +93,25 @@ LinuxGuardianWatchdog/
 
 ## Requirements
 
-- A Linux desktop (tested target: GNOME / any GTK4+libadwaten-capable DE)
-- `clamav` (`clamscan`, `freshclam`) and `rkhunter` — install via your
-  distro's package manager, e.g. `sudo apt install clamav rkhunter`
-- Python 3.10+ with PyGObject (`python3-gi`) and `libadwaita-1` for the GUI
-- `systemd` (user services) for scheduled scans
+Target: Ubuntu 22.04 with GNOME on X11 (libadwaita 1.1). Other distributions are untested.
+
+```bash
+sudo apt install python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+                 clamav rkhunter policykit-1 libnotify-bin iproute2 ufw util-linux
+```
+
+| Needed for | Packages / programs | If it is missing |
+|---|---|---|
+| The window | `python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1` (libadwaita) | the GUI doesn't start; every script still works from a terminal |
+| Malware and rootkit scans | `clamav` (`clamscan`, `freshclam`), `rkhunter` | scans say the scanner is missing instead of reporting "clean" |
+| Password prompts for the few root actions | `policykit-1` (`pkexec`) with a desktop auth agent | root actions are refused with a clear message; nothing runs unprivileged instead |
+| Scheduled scans and live monitoring | `systemd` user session (`systemctl --user`) | timers can't be installed; run the scripts by hand |
+| Desktop notifications | `libnotify-bin` (`notify-send`) | notifications are skipped; events are still recorded |
+| Network and disk checks | `iproute2` (`ss`, `ip`), `util-linux` (`lsblk`), `ufw` | those checks report "unknown", never "all clear" |
+| Optional | `tailscale`, Proton VPN (via NetworkManager), `ollama` (local AI), the `anthropic` Python SDK (cloud AI) | the matching feature shows as unavailable |
+
+The Python code itself uses only the standard library plus PyGObject: no `pip install` is needed to run it. Tools for developing and
+testing it are pinned in `requirements-dev.txt`.
 
 ## Getting started (scripts only, no GUI yet)
 
@@ -155,8 +170,7 @@ cd LinuxGuardianSuite
 
 ```bash
 cd LinuxGuardianSuiteUI
-python3 -m pip install -r requirements.txt   # or use your distro's PyGObject package
-python3 -m linuxguardian_ui.main
+./run_ui.sh                                  # or: python3 -m linuxguardian_ui.main   (PyGObject comes from apt, see Requirements)
 ```
 
 ### Desktop / dock integration

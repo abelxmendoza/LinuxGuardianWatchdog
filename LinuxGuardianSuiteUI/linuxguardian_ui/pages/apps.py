@@ -16,7 +16,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui.components import copy_action, widget_report, page_header, section_header  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
@@ -154,7 +154,7 @@ class AppsPage(Gtk.Box):
             self._set_busy(False)
             try:
                 plan = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 self._show_error(" ".join(lines)[:300] or "That file isn't a LinuxGuardian app list.")
                 return
             self._plan = plan

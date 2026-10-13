@@ -86,7 +86,7 @@ def load_state() -> dict:
     try:
         d = json.loads(state_path().read_text())
         return d if isinstance(d, dict) else {}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
 
 
@@ -187,7 +187,7 @@ def remove() -> dict:
 def scan_windows() -> list[tuple[float, float]]:
     try:
         d = json.loads((lg_home() / "scans" / "last.json").read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return []
     s, e = d.get("started_epoch"), d.get("ended_epoch")
     return [(float(s) - SCAN_GRACE, float(e) + SCAN_GRACE)] if isinstance(s, (int, float)) and isinstance(e, (int, float)) else []

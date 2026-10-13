@@ -1,0 +1,23 @@
+# Static analysis for LinuxGuardian. Chosen for real defects, not style: undefined names, unused code, likely bugs, and the few
+# security rules that apply to a tool that runs subprocesses without a shell.
+target-version = "py310"
+line-length = 160
+extend-exclude = ["images", "docs"]
+
+[lint]
+select = [
+  "E9",    # syntax errors
+  "F",     # pyflakes: undefined names, unused imports/variables, redefinitions
+  "B",     # bugbear: likely bugs
+  "S102", "S301", "S307", "S506", "S602", "S604", "S605", "S606",   # exec, pickle, eval, unsafe yaml, shell=True and friends
+  "PLE",   # pylint errors
+]
+ignore = [
+  "B008",  # function calls in defaults: used deliberately by argparse helpers
+  "B007",  # unused loop variable: tuple unpacking for readability
+  "B905",  # zip() strict=: the lengths are equal by construction
+]
+
+[lint.per-file-ignores]
+# pytest fixtures are imported from another test module and used as parameters, which pyflakes reports as redefinition
+"LinuxGuardianSuiteUI/tests/*" = ["F811", "B011", "B017", "PLE0604"]

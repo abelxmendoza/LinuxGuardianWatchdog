@@ -333,13 +333,36 @@ def test_monitoring_states(env, monkeypatch):
 
 def test_space_warnings(env, monkeypatch):
     assert sc.check_space()["level"] == "ok"
+    real_usage = sc.shutil.disk_usage
     monkeypatch.setattr(sc.shutil, "disk_usage", lambda p: type("U", (), {"free": 100 * 1024 * 1024})())
     assert sc.check_space()["level"] == "warning" and "100 MB" in sc.check_space()["text"]
-    monkeypatch.undo()
-    monkeypatch.setenv("LG_HOME", str(env / "lg"))
+    monkeypatch.setattr(sc.shutil, "disk_usage", real_usage)
     monkeypatch.setattr(sc, "BIG_LOG", 10)
     write(env / "lg/logs/big.log", "x" * 100)
     assert sc.check_space()["level"] == "warning"
+
+
+def test_an_unwritable_data_folder_is_reported_in_plain_words(env, monkeypatch):
+    assert sc.check_data_writable()["level"] == "ok"
+    state = env / "lg" / "state"
+    state.mkdir(parents=True, exist_ok=True)
+    state.chmod(0o500)
+    try:
+        c = sc.check_data_writable()
+    finally:
+        state.chmod(0o700)
+    assert c["level"] == "warning" and "can't write" in c["text"] and "permission denied" in c["text"] and "lost" in c["text"]
+
+
+def test_a_full_disk_is_named_as_such(env, monkeypatch):
+    import errno
+
+    def boom(self, *a, **k):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(Path, "write_text", boom)
+    c = sc.check_data_writable()
+    assert c["level"] == "warning" and "the disk is full" in c["text"]
 
 
 # ----------------------------------------------------------------------- upkeep
@@ -369,7 +392,7 @@ def test_recent_snapshots_are_kept(env):
 # ------------------------------------------------------------------- overall
 def test_check_summarises_and_lists_every_area(env):
     r = sc.check()
-    assert {c["id"] for c in r["checks"]} == {"app_files", "app_permissions", "data_permissions", "state", "allow_list", "monitoring", "space"}
+    assert {c["id"] for c in r["checks"]} == {"app_files", "app_permissions", "data_permissions", "state", "allow_list", "monitoring", "data_writable", "space"}
     assert r["level"] in ("ok", "info", "warning") and ("healthy" in r["headline"] or "attention" in r["headline"])
     (env / "app/LinuxGuardianSuite/sensors.py").chmod(0o777)
     r = sc.check()

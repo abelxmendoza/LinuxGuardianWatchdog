@@ -42,7 +42,6 @@ STATUSES = ("detected", "changed", "resolved")
 INCIDENT, FINDING, INFORMATION = "incident", "finding", "information"
 _INCIDENT_CATEGORIES = {"sensor", "malware", "honeypot", "selfcheck"}
 _FINDING_CATEGORIES = {"audit", "network", "rootkit", "updates", "hardening"}
-_ROUTINE_INTEGRITY = {"file_modified", "file_missing", "file_new"}      # edits to your own documents
 
 
 def kind_of(category: str, severity: str, event: str | None = None) -> str:
@@ -52,8 +51,9 @@ def kind_of(category: str, severity: str, event: str | None = None) -> str:
     if category in _INCIDENT_CATEGORIES:
         return INCIDENT
     if category == "integrity":
-        # a change where programs start from is an incident; edits to ordinary files only become one in a burst (see integrity.py)
-        return FINDING if event in _ROUTINE_INTEGRITY else INCIDENT
+        # integrity.py already rates a routine edit to your own documents as "info" (handled above) and a change where programs start from,
+        # a git hook, or a burst of document changes as a warning: every warning or critical here is something that may have happened.
+        return INCIDENT
     if category in _FINDING_CATEGORIES:
         return FINDING
     return INFORMATION if category in {"maintenance", "process"} else FINDING
@@ -119,10 +119,10 @@ def read_events(directory: Path | None = None, limit: int = 200) -> list[dict]:
     for path in sorted(directory.glob("*.json"), reverse=True):
         try:
             data = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             continue
-        if not isinstance(data, dict) or "severity" not in data or "message" not in data:
-            continue
+        if not isinstance(data, dict) or data.get("severity") not in SEVERITIES or not isinstance(data.get("message"), str):
+            continue                                       # a record with the wrong shape is skipped, never passed on to break a reader
         events.append(data)
         if len(events) >= limit:
             break

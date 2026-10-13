@@ -118,7 +118,7 @@ def load_ignored() -> dict:
     try:
         d = json.loads(ignore_path().read_text())
         return d if isinstance(d, dict) else {}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
 
 
@@ -180,7 +180,7 @@ def findings(report: Path | None = None) -> dict:
     """What the last scan flagged that is still here and not already handled."""
     try:
         last = json.loads((lg_home() / "scans" / "last.json").read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         last = {}
     last = last if isinstance(last, dict) else {}
     rpt = report or (Path(last["report"]) if last.get("report") else None)
@@ -204,24 +204,40 @@ def findings(report: Path | None = None) -> dict:
 
 
 # ============================================================ verify
+def _scanners() -> list[list[str]]:
+    """Scanner command lines to try, best first. The daemon client is only used if the daemon actually answers: the `clamdscan` program is
+    installed with clamav-daemon even when the daemon isn't running, and then fails with an error instead of scanning."""
+    out: list[list[str]] = []
+    clamdscan = shutil.which("clamdscan")
+    if clamdscan:
+        try:
+            alive = subprocess.run([clamdscan, "--ping", "1"], capture_output=True, timeout=10, check=False).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            alive = False
+        if alive:
+            out.append([clamdscan, "--no-summary", "--fdpass"])
+    clamscan = shutil.which("clamscan")
+    if clamscan:
+        out.append([clamscan, "--no-summary"])
+    return out
+
+
 def verify_infected(path: str) -> str | None:
     """Scan this one file again. The signature name if it is still detected, '' if clean, None if no scanner could run."""
-    exe = shutil.which("clamdscan") or shutil.which("clamscan")
-    if exe is None:
-        return None
-    cmd = [exe, "--no-summary"] + (["--fdpass"] if os.path.basename(exe) == "clamdscan" else []) + ["--", path]
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=SCAN_TIMEOUT, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if r.returncode == 1:
-        for line in r.stdout.splitlines():
-            m = FOUND_LINE.match(line.strip())
-            if m:
-                return m["sig"].strip()
-        return "(detected)"
-    if r.returncode == 0:
-        return ""
+    for base in _scanners():
+        try:
+            r = subprocess.run(base + ["--", path], capture_output=True, text=True, timeout=SCAN_TIMEOUT, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if r.returncode == 1:
+            for line in r.stdout.splitlines():
+                m = FOUND_LINE.match(line.strip())
+                if m:
+                    return m["sig"].strip()
+            return "(detected)"
+        if r.returncode == 0:
+            return ""
+        # any other exit status means this scanner couldn't do its job (daemon error, database missing): try the next one
     return None
 
 
@@ -338,7 +354,7 @@ def list_items() -> list[dict]:
             continue
         try:
             meta = json.loads((d / "meta.json").read_text())
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             continue
         if not isinstance(meta, dict) or meta.get("id") != d.name or not (d / "payload").is_file():
             continue
@@ -439,13 +455,13 @@ def main() -> int:
                     print(f"{m['id']}  {m['shown']}  {m.get('signature', '')}")
                 if not items:
                     print("Quarantine is empty.")
-        elif a.quarantine:
+        elif a.quarantine is not None:
             r = quarantine(a.quarantine, a.signature, verify=not a.skip_verify)
             print(json.dumps(r) if a.json else f"Moved to quarantine as {r['id']}. Restore with: {Path(__file__).resolve()} --restore {r['id']}")
-        elif a.restore:
+        elif a.restore is not None:
             r = restore(a.restore, a.keep_executable)
             print(json.dumps(r) if a.json else f"Restored to {r['path']}" + ("" if r["executable"] else " (not executable)."))
-        elif a.delete:
+        elif a.delete is not None:
             delete(a.delete)
             print("Deleted permanently.")
         else:

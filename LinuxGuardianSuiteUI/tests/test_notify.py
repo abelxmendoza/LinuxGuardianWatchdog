@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import stat
 import sys
 import time
@@ -114,9 +113,16 @@ def test_a_critical_standing_finding_is_announced_once(env):
 
 def test_edits_to_your_own_documents_are_information_not_alarms(env):
     ne.run_send(NOW)
-    event(env, "a", NOW + 10, category="integrity", event="file_modified", message="File changed: /home/me/Documents/resume.pdf")
-    event(env, "b", NOW + 11, category="integrity", event="file_missing", message="File missing: /home/me/Documents/old.txt")
+    event(env, "a", NOW + 10, severity="info", category="integrity", event="file_modified", message="File changed: /home/me/Documents/resume.pdf")
+    event(env, "b", NOW + 11, severity="info", category="integrity", event="file_missing", message="File missing: /home/me/Documents/old.txt")
     assert ne.run_send(NOW + 20) == 0
+
+
+def test_a_changed_shell_startup_file_does_interrupt(env):
+    """Regression: integrity warnings (a changed .bashrc, a git hook, a burst of changes) are incidents, whatever the event is called."""
+    ne.run_send(NOW)
+    event(env, "a", NOW + 10, category="integrity", event="file_modified", message="File changed: /home/me/.bashrc")
+    assert ne.run_send(NOW + 20) == 1
 
 
 def test_a_change_where_programs_start_from_does_interrupt(env):
@@ -137,7 +143,8 @@ def test_kind_of_classifies_every_category_the_suite_writes():
     assert kind_of("sensor", "warning") == "incident" and kind_of("malware", "critical") == "incident" and kind_of("honeypot", "critical") == "incident"
     assert kind_of("selfcheck", "warning", "monitoring_stopped") == "incident"
     assert kind_of("audit", "warning") == "finding" and kind_of("network", "warning") == "finding" and kind_of("rootkit", "warning") == "finding"
-    assert kind_of("integrity", "warning", "file_modified") == "finding" and kind_of("integrity", "warning", "file_new_persistence") == "incident"
+    assert kind_of("integrity", "warning", "file_modified") == "incident" and kind_of("integrity", "warning", "file_new_persistence") == "incident"
     assert kind_of("integrity", "warning", "file_changes") == "incident"                   # a burst of changes is not routine
+    assert kind_of("integrity", "info", "file_modified") == "information"                  # an ordinary document edit is
     assert kind_of("sensor", "info") == "information" and kind_of("audit", "info") == "information" and kind_of("process", "info") == "information"
     assert kind_of("something_new", "warning") == "finding"                                  # unknown categories are never silently incidents

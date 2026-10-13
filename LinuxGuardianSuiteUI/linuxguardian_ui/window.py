@@ -189,7 +189,7 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
         def done(code: int, lines: list[str]) -> None:
             try:
                 r = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 return
             self._health_result(r)
             if r.get("level") in ("warning", "critical"):

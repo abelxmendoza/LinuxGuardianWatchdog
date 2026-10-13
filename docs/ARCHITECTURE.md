@@ -314,6 +314,23 @@ half-finished updates and unsophisticated tampering and raises an alert; it cann
 mode 600, size-capped) and offers the terminal commands, instead of taking the whole app down; uncaught errors on any thread are
 logged the same way. The log writer can never raise a second error.
 
+### Stabilization rules (1.0 pass)
+
+Behaviors added or tightened while verifying the project; each has regression tests (`tests/test_stabilization.py`, `tests/test_security_inputs.py`).
+
+- **Config files are data, not code.** `config.sh` no longer `source`s the config file. `lg_load_config` parses `KEY=value` lines for an allow-list
+  of names (`LG_CONFIG_ALLOWED`) and refuses a file that is not owned by the user or is group/world-writable. `$(...)`, backticks and unknown keys are ignored.
+- **One sensor run at a time.** `sensors.py --run` takes an `flock` run lock (a second run exits quietly), writes state atomically (per-PID temp file + rename),
+  and survives an unwritable data folder: it reports `write_errors` on stderr instead of crashing. `self_check` shows a "data folder not writable" finding.
+- **Event files are untrusted input.** `events.read_events` drops files whose severity is unknown or whose message is not text, so one corrupt file cannot break the Timeline.
+- **No lost notifications.** `notify_events` remembers which events in the boundary second were already announced, so two events in the same second are both shown once.
+- **Process manager guards.** PIDs must be digits, > 1 and not the tool itself; kill-by-name needs 3+ alphanumerics, only matches the user's own processes,
+  skips critical names, and is capped (`LG_KILL_MAX`, default 25). Nothing is killed automatically.
+- **Local AI stays local.** The Ollama URL must be a loopback address (`ai_investigator.local_ollama_url`), including when pulling models.
+- **Quarantine verification** only trusts the ClamAV daemon when `clamdscan --ping` succeeds; otherwise it falls back to `clamscan`.
+- **Installers report failure honestly** (`install_scheduler.sh` checks `systemctl` exit codes; the desktop entry quotes its `Exec` path).
+- **Tests never touch real data.** `tests/conftest.py` gives every test an isolated HOME/`LG_HOME` and an empty fake `/proc`; `test_hygiene.py` fails if a test leaks.
+
 ## Malware cleaner (quarantine)
 
 ClamAV finds malware; `quarantine.py` (the Malware tab) deals with it cautiously, because antivirus has false alarms (a ROS

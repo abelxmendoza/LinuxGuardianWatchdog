@@ -50,7 +50,7 @@ def accepted_path() -> Path:
 def load_accepted() -> dict[str, dict]:
     try:
         data = json.loads(accepted_path().read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -98,7 +98,7 @@ def unaccept(message: str) -> bool:
 def load_previous() -> dict[str, dict]:
     try:
         data = json.loads(state_path().read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
 

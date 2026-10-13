@@ -149,7 +149,7 @@ class VpnPage(Gtk.Box):
             self.spinner.stop()
             try:
                 r = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 self.verdict.set_label("Couldn't read VPN status: " + " ".join(lines)[:160])
                 return
             self._render(r)

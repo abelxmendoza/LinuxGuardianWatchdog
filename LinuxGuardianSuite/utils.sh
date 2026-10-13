@@ -62,6 +62,18 @@ lg_detect_firewall() {
   if [ "$unknown" -eq 1 ]; then echo "unknown"; else echo "none"; fi
 }
 
+lg_json_escape() {
+  # What goes between the quotes of a JSON string. A file name can contain a backslash, a quote or a newline, and a message built from one
+  # must still be valid JSON (an event that can't be read back is an event that silently never happened).
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/ }"
+  s="${s//$'\r'/ }"
+  s="${s//$'\t'/ }"
+  printf '%s' "$s" | tr -d '\000-\010\013\014\016-\037'
+}
+
 # Records a structured incident for the GUI to pick up later.
 lg_record_incident() {
   local category="$1" severity="$2" message="$3"
@@ -69,7 +81,7 @@ lg_record_incident() {
   ts="$(date '+%Y-%m-%dT%H:%M:%S%z')"
   file="$LG_INCIDENT_DIR/$(date '+%Y%m%d-%H%M%S')-$$-$RANDOM.json"
   printf '{"timestamp":"%s","category":"%s","severity":"%s","message":"%s"}\n' \
-    "$ts" "$category" "$severity" "${message//\"/\\\"}" > "$file"
+    "$ts" "$(lg_json_escape "$category")" "$(lg_json_escape "$severity")" "$(lg_json_escape "$message")" > "$file"
 }
 
 lg_fmt_duration() {
@@ -90,7 +102,8 @@ lg_fmt_duration() {
 lg_progress() {
   local phase="${1:-}" message="${2:-}"
   shift $(( $# >= 2 ? 2 : $# ))
-  local out="LG_PROGRESS|phase=$(_lg_progress_sanitize "$phase")"
+  local out
+  out="LG_PROGRESS|phase=$(_lg_progress_sanitize "$phase")"
   [ -n "$message" ] && out+="|message=$(_lg_progress_sanitize "$message")"
   local kv
   for kv in "$@"; do

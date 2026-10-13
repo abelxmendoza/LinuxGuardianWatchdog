@@ -1,9 +1,7 @@
 """Setuid watch: finds the right files, judges each by where it is and who owns it, and never mistakes a partial look for a removal."""
 from __future__ import annotations
 
-import json
 import os
-import stat
 import sys
 import time
 from pathlib import Path

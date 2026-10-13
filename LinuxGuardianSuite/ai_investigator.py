@@ -33,7 +33,6 @@ Test hooks: LG_HOME, LG_AI_OLLAMA_URL; the Anthropic client can be injected for 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -99,6 +98,25 @@ RESULT_SCHEMA = {
 }
 
 
+def local_ollama_url(url: str) -> str:
+    """The address of the 'local' model, checked. The investigator tells you the evidence stays on this laptop, so the address must really be
+    this laptop (and http/https only: urllib would also happily open file:// or ftp:// addresses). Returns the URL without a trailing slash."""
+    import ipaddress
+    from urllib.parse import urlparse
+
+    u = urlparse((url or "").strip())
+    host = (u.hostname or "").lower()
+    ok = u.scheme in ("http", "https") and bool(host)
+    if ok and host != "localhost":
+        try:
+            ok = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            ok = False
+    if not ok:
+        raise AiError("The local model's address must be on this laptop (http://127.0.0.1:11434). Anything else would send your evidence off the machine.")
+    return url.strip().rstrip("/")
+
+
 class AiError(Exception):
     """A problem the person can understand and act on."""
 
@@ -123,7 +141,7 @@ def log_dir() -> Path:
 def load_config() -> dict:
     try:
         data = json.loads(config_path().read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         data = {}
     cfg = {**DEFAULT_CONFIG, **{k: v for k, v in data.items() if k in DEFAULT_CONFIG}}
     if cfg["backend"] not in ("off", "ollama", "anthropic"):
@@ -197,19 +215,19 @@ class OllamaBackend(Backend):
     def __init__(self, model: str, url: str = OLLAMA_URL, timeout: float = 300) -> None:
         if not model:
             raise AiError("Pick a local model first (AI settings), for example one you've pulled with `ollama pull`.")
-        self.model, self.url, self.timeout = model, url.rstrip("/"), timeout
+        self.model, self.url, self.timeout = model, local_ollama_url(url), timeout
         self.destination = f"this laptop (Ollama at {self.url})"
 
     def _post(self, path: str, payload: dict) -> dict:
         req = urllib.request.Request(self.url + path, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:  # noqa: S310 - local URL from the user's own config
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:  # nosec B310  # noqa: S310 - local URL from the user's own config
                 return json.loads(r.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as exc:
             raise AiError(f"Ollama answered with an error ({exc.code}). Is the model '{self.model}' pulled?") from exc
         except (urllib.error.URLError, OSError, TimeoutError) as exc:
             raise AiError(f"Can't reach Ollama at {self.url}. Is it running? (`ollama serve`)") from exc
-        except json.JSONDecodeError as exc:
+        except ValueError as exc:
             raise AiError("Ollama sent something unreadable.") from exc
 
     def complete(self, system: str, user: str) -> tuple[str, dict]:
@@ -396,13 +414,13 @@ def parse_json(text: str) -> dict:
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
     try:
         data = json.loads(text)
-    except json.JSONDecodeError:
+    except ValueError:
         m = re.search(r"\{.*\}", text, re.S)
         if not m:
-            raise AiError("The model's answer wasn't in the expected format.")
+            raise AiError("The model's answer wasn't in the expected format.") from None
         try:
             data = json.loads(m.group(0))
-        except json.JSONDecodeError as exc:
+        except ValueError as exc:
             raise AiError("The model's answer wasn't in the expected format.") from exc
     if not isinstance(data, dict):
         raise AiError("The model's answer wasn't in the expected format.")
@@ -456,7 +474,7 @@ def load_run(run_id: str) -> dict:
         raise AiError("No such investigation.")
     try:
         return json.loads((log_dir() / f"{run_id}.json").read_text())
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         raise AiError("No such investigation.") from exc
 
 
@@ -511,9 +529,9 @@ def model_grade(cfg: dict | None = None) -> dict | None:
 
 def ollama_models(url: str = OLLAMA_URL) -> list[str] | None:
     try:
-        with urllib.request.urlopen(url.rstrip("/") + "/api/tags", timeout=3) as r:  # noqa: S310
+        with urllib.request.urlopen(local_ollama_url(url) + "/api/tags", timeout=3) as r:  # nosec B310  # noqa: S310 - validated loopback http(s) address
             return [m["name"] for m in json.loads(r.read().decode()).get("models", [])]
-    except (urllib.error.URLError, OSError, ValueError, TimeoutError, KeyError):
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError, KeyError, AiError):
         return None
 
 

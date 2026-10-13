@@ -287,7 +287,7 @@ def save(report: dict) -> None:
 def load_report(model: str) -> dict | None:
     try:
         d = json.loads((eval_dir() / f"{_slug(model)}.json").read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     return d if isinstance(d, dict) else None
 
@@ -310,7 +310,7 @@ def all_grades() -> list[dict]:
             try:
                 r = json.loads(p.read_text())
                 out.append(grade_for(r["model"]))
-            except (OSError, json.JSONDecodeError, KeyError):
+            except (OSError, ValueError, KeyError):
                 continue
     return out
 

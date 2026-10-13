@@ -12,7 +12,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import GLib, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui.activity import Activity
 from linuxguardian_ui.activity_view import ActivityView
@@ -649,7 +649,7 @@ class DashboardPage(Gtk.Box):
         def done(_code: int, lines: list[str]) -> None:
             try:
                 result = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 result = {"ok": False, "reason": "Could not analyze the last rootkit scan: " + " ".join(lines)[:200],
                           "files": [], "safe_to_refresh": False}
             rows = [(f["explained"], f["path"], f["why"]) for f in result.get("files", [])]
@@ -682,7 +682,7 @@ class DashboardPage(Gtk.Box):
         def done(code: int, lines: list[str]) -> None:
             try:
                 data = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 self.hardening_title.set_label("Couldn't check")
                 return
             sc = data["score"]
@@ -694,7 +694,7 @@ class DashboardPage(Gtk.Box):
         def vpn_done(code: int, lines: list[str]) -> None:
             try:
                 r = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 return
             ts, px = r.get("tailscale", {}), r.get("proton", {})
             ts_on = ts.get("state") == "Running" and ts.get("online")
@@ -705,7 +705,7 @@ class DashboardPage(Gtk.Box):
         def inc_done(code: int, lines: list[str]) -> None:
             try:
                 incs = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 return
             bad = [i for i in incs if i["severity"] in ("warning", "critical")]
             self.incident_line.set_label(f"{len(bad)} open incident{'s' if len(bad) != 1 else ''}" if bad else "No open incidents")

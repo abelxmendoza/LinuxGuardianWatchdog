@@ -12,7 +12,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
@@ -155,7 +155,7 @@ class HardeningPage(Gtk.Box):
         self.spinner.stop()
         try:
             data = json.loads("".join(lines))
-        except json.JSONDecodeError:
+        except ValueError:
             self.headline.set_label("Couldn't run the hardening checks.")
             self.subline.set_label(" ".join(lines)[:200])
             return
@@ -328,7 +328,7 @@ class HardeningPage(Gtk.Box):
             self._clear(self.diag_out)
             try:
                 r = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 self.diag_out.append(_label("Diagnostics couldn't run: " + " ".join(lines)[:200], "omega-warning"))
                 return
             self._show_diag(r)

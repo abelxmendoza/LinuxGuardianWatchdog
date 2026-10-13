@@ -34,7 +34,7 @@ install_entry() {
 Type=Application
 Name=LinuxGuardian Watchdog
 Comment=Native Linux security suite - antivirus, integrity monitoring, security audit
-Exec=$APP_DIR/run_ui.sh
+Exec="$APP_DIR/run_ui.sh"
 Icon=$ICON_NAME
 StartupWMClass=$ICON_NAME
 Terminal=false

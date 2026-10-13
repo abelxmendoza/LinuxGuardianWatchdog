@@ -109,7 +109,7 @@ def gs_int(raw: str | None) -> int | None:
 def load_undo() -> dict:
     try:
         data = json.loads(undo_path().read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -909,7 +909,7 @@ def main() -> int:
     elif a.record:
         try:
             remember(a.record[0], json.loads(a.record[1]))
-        except json.JSONDecodeError:
+        except ValueError:
             return 1
     elif a.undo_args:
         words = undo_args(a.undo_args)

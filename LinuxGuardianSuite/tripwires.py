@@ -319,11 +319,11 @@ def diff(old: dict | None, new: dict) -> list[dict]:
                 owner = package_owner(path)
                 if owner:
                     continue                                  # a package's own update hook
-                out.append(_finding(f"tw:risk:{path}:{hashlib.sha1(r.encode()).hexdigest()[:10]}", "critical", "tripwire_risky_setting",
+                out.append(_finding(f"tw:risk:{path}:{hashlib.sha1(r.encode(), usedforsecurity=False).hexdigest()[:10]}", "critical", "tripwire_risky_setting",
                                     f"An apt hook that runs a command was added in {path}: {text}. It runs with administrator rights every time you update.",
                                     [path], "T1546", {"group": gid}))
                 continue
-            out.append(_finding(f"tw:risk:{path}:{hashlib.sha1(r.encode()).hexdigest()[:10]}", sev, "tripwire_risky_setting",
+            out.append(_finding(f"tw:risk:{path}:{hashlib.sha1(r.encode(), usedforsecurity=False).hexdigest()[:10]}", sev, "tripwire_risky_setting",
                                 f"{title}: {text} (in {path}). {why}", [path], tech, {"group": gid}))
         if new_risks:
             continue                                           # the specific finding says it better than 'file changed'

@@ -60,18 +60,32 @@ def set_enabled(enabled: bool) -> None:
         _disabled_flag().write_text("")
 
 
+def _read_marker() -> dict:
+    try:
+        d = json.loads(_marker().read_text())
+    except (OSError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
 def _read_watermark() -> float | None:
     try:
-        return float(json.loads(_marker().read_text())["last_epoch"])
-    except (OSError, ValueError, KeyError, json.JSONDecodeError, TypeError):
+        return float(_read_marker()["last_epoch"])
+    except (KeyError, TypeError, ValueError):
         return None
 
 
-def _write_watermark(epoch: float) -> None:
+def _write_marker(epoch: float, announced: dict | None = None) -> None:
+    """Remember where we got to, and which entries (key -> time) were already announced near that point."""
     _state_dir().mkdir(parents=True, exist_ok=True)
+    keep = {k: v for k, v in (announced if announced is not None else _read_marker().get("announced", {})).items() if isinstance(v, (int, float)) and v >= epoch - 3600}
     tmp = _marker().with_suffix(".tmp")
-    tmp.write_text(json.dumps({"last_epoch": epoch}))
+    tmp.write_text(json.dumps({"last_epoch": epoch, "announced": keep}))
     tmp.replace(_marker())
+
+
+def _write_watermark(epoch: float) -> None:
+    _write_marker(epoch)
 
 
 def _notify_cmd() -> str | None:
@@ -121,12 +135,22 @@ def run_send(now: float | None = None) -> int:
     if last is None:
         _write_watermark(now)       # first run: start from now, don't replay history
         return 0
-    fresh = [e for e in load_entries() if e.last_ts > last and e.status != "resolved" and worth_a_popup(e)]
-    _write_watermark(now)
+    # Events are stamped to the whole second, but the watermark is a precise time. An event recorded in the same second as the previous run
+    # (after it) would be stamped at or before the watermark and never announced. So the boundary second counts as unseen, and what was
+    # already announced is remembered so that second isn't announced twice.
+    announced = _read_marker().get("announced", {})
+    boundary = int(last)
+    fresh = [e for e in load_entries()
+             if e.last_ts >= boundary and e.status != "resolved" and worth_a_popup(e) and not (e.key in announced and announced[e.key] >= e.last_ts)]
     if not fresh:
+        _write_marker(now, announced)
         return 0
     title, body, critical = compose(fresh)
-    return len(fresh) if send_notification(title, body, critical=critical) else 0
+    sent = send_notification(title, body, critical=critical)
+    if sent:
+        announced = {**announced, **{e.key: e.last_ts for e in fresh}}
+    _write_marker(now, announced)
+    return len(fresh) if sent else 0
 
 
 def main() -> int:

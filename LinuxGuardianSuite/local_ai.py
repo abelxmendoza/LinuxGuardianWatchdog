@@ -143,16 +143,20 @@ def pull(tag: str, emit=print) -> int:
         emit("[error] That doesn't look like a model name (for example qwen2.5:7b).")
         return 2
     cfg = ai.load_config()
-    url = (cfg.get("ollama_url") or ai.OLLAMA_URL).rstrip("/")
+    try:
+        url = ai.local_ollama_url(cfg.get("ollama_url") or ai.OLLAMA_URL)
+    except ai.AiError as exc:
+        emit(f"[error] {exc}")
+        return 1
     req = urllib.request.Request(url + "/api/pull", data=json.dumps({"model": tag, "stream": True}).encode(),
                                  headers={"Content-Type": "application/json"})
     last = -1
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310 - the user's own local Ollama
+        with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310  # noqa: S310 - the user's own local Ollama
             for raw in resp:
                 try:
                     msg = json.loads(raw)
-                except json.JSONDecodeError:
+                except ValueError:
                     continue
                 if msg.get("error"):
                     emit(f"[error] {str(msg['error'])[:200]}")

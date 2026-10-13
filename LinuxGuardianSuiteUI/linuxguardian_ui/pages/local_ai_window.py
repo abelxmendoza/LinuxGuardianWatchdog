@@ -47,11 +47,11 @@ def _parse(lines: list[str]) -> dict:
         if line.startswith("{"):
             try:
                 return json.loads(line)
-            except json.JSONDecodeError:
+            except ValueError:
                 break
     try:
         return json.loads("".join(lines))
-    except json.JSONDecodeError:
+    except ValueError:
         return {"error": " ".join(lines)[-300:] or "No answer."}
 
 

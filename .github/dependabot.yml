@@ -1,0 +1,9 @@
+# Proposes updates as pull requests for a person to review. Nothing here merges or deploys by itself.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: monthly}
+  - package-ecosystem: pip
+    directory: /
+    schedule: {interval: monthly}

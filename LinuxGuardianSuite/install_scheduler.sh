@@ -53,8 +53,10 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-  systemctl --user daemon-reload
-  systemctl --user enable --now "$TIMER_NAME"
+  if ! systemctl --user daemon-reload || ! systemctl --user enable --now "$TIMER_NAME"; then
+    lg_error "Couldn't turn on $TIMER_NAME (is your user systemd session running?). The unit files are in $UNIT_DIR; run '$0 --uninstall' to clean up."
+    return 1
+  fi
   # Our own new files must not be reported by the daily integrity check as something that appeared in a start-up location.
   python3 "$SCRIPT_DIR/integrity.py" --accept "$UNIT_DIR/$SERVICE_NAME" "$UNIT_DIR/$TIMER_NAME" >/dev/null 2>&1 || true
   lg_ok "Installed and enabled $TIMER_NAME (systemctl --user list-timers to verify)"
@@ -89,8 +91,10 @@ AccuracySec=30s
 [Install]
 WantedBy=timers.target
 EOF
-  systemctl --user daemon-reload
-  systemctl --user enable --now "$SENSORS_TIMER"
+  if ! systemctl --user daemon-reload || ! systemctl --user enable --now "$SENSORS_TIMER"; then
+    lg_error "Couldn't turn on live monitoring (is your user systemd session running?). Run '$0 --uninstall-sensors' to clean up."
+    return 1
+  fi
   python3 "$SCRIPT_DIR/integrity.py" --accept "$UNIT_DIR/$SENSORS_SERVICE" "$UNIT_DIR/$SENSORS_TIMER" >/dev/null 2>&1 || true
   lg_ok "Live monitoring is on ($SENSORS_TIMER)."
 }

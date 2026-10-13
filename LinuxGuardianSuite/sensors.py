@@ -30,6 +30,8 @@ Test hooks: LG_HOME, LG_PROC, LG_AUTH_LOG, LG_SENSOR_HOME, LG_SENSOR_ETC, LG_PAS
 from __future__ import annotations
 
 import argparse
+import errno
+import fcntl
 import hashlib
 import ipaddress
 import json
@@ -39,7 +41,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -106,16 +108,32 @@ def load_state() -> dict:
     try:
         d = json.loads(state_path().read_text())
         return d if isinstance(d, dict) else {}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    """Write-then-rename with a temp name unique to this process, so two runs at once can't trip over each other's temp file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text)
+        tmp.replace(path)
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
 def save_state(state: dict) -> None:
-    p = state_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state))
-    tmp.replace(p)
+    _atomic_write(state_path(), json.dumps(state))
+
+
+def _why(exc: OSError) -> str:
+    """A short, plain reason for a failed write ('disk full', 'permission denied', ...)."""
+    return {errno.ENOSPC: "the disk is full", errno.EACCES: "permission denied", errno.EROFS: "the disk is read-only",
+            errno.EDQUOT: "the disk quota is used up"}.get(exc.errno, exc.strerror or type(exc).__name__)
 
 
 def load_allow() -> dict:
@@ -123,7 +141,7 @@ def load_allow() -> dict:
     try:
         d = json.loads(allow_path().read_text())
         return d if isinstance(d, dict) else {}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
 
 
@@ -203,7 +221,7 @@ def sensor_auth(ctx: Ctx) -> list[Finding]:
         info = path.stat()
         fh = path.open("r", errors="replace")
     except OSError as exc:
-        raise SensorUnavailable(f"can't read {path} ({exc.strerror or exc}). Join the 'adm' group to let LinuxGuardian read login history.")
+        raise SensorUnavailable(f"can't read {path} ({exc.strerror or exc}). Join the 'adm' group to let LinuxGuardian read login history.") from exc
     with fh:
         if ctx.first_run or st.get("inode") != info.st_ino or info.st_size < st.get("offset", 0):
             # first look, or the log was rotated: start from where reading is meaningful
@@ -250,7 +268,7 @@ def sensor_auth(ctx: Ctx) -> list[Finding]:
             m = re.search(r"sudo:\s+(\S+) : .*?COMMAND=(.*)$", line)
             if m:
                 cmd = redact_args(m.group(2).strip())[:160]
-                out.append(Finding(f"auth:sudo:{m.group(1)}:{hashlib.sha1(cmd.encode()).hexdigest()[:8]}", "info", "sudo_sensitive",
+                out.append(Finding(f"auth:sudo:{m.group(1)}:{hashlib.sha1(cmd.encode(), usedforsecurity=False).hexdigest()[:8]}", "info", "sudo_sensitive",
                                    f"{m.group(1)} ran a sensitive command with sudo: {cmd}", [m.group(1)], "T1548.003", "privilege", {"user": m.group(1)}))
     for src, users in fails.items():
         if len(users) >= FAILED_LOGIN_THRESHOLD:
@@ -273,7 +291,6 @@ def sensor_auth(ctx: Ctx) -> list[Finding]:
 
 def sensor_processes(ctx: Ctx) -> list[Finding]:
     out: list[Finding] = []
-    h = str(home())
     for p in iter_processes():
         exe = p["exe"]
         if not exe:
@@ -647,7 +664,7 @@ def sensor_self(ctx: Ctx) -> list[Finding]:
     """The app watching itself: a changed or unexpected program file is reported like any other persistence attempt."""
     out = []
     for c in self_check.sensor_findings():
-        key = "self:app:" + hashlib.sha1("|".join(c["paths"]).encode()).hexdigest()[:12]
+        key = "self:app:" + hashlib.sha1("|".join(c["paths"]).encode(), usedforsecurity=False).hexdigest()[:12]
         root = self_check.app_root()
         sev = c.get("sensor_level", c["level"])
         out.append(Finding(key, sev, "app_tampered" if sev == "critical" else "app_modified", c["text"],
@@ -675,7 +692,42 @@ DESCRIPTIONS = {
 
 
 # ================================================================= engine
+class _RunLock:
+    """One run at a time. The 5-minute timer and a press of "Check now" can overlap; both would read, change and write the same state."""
+
+    def __init__(self) -> None:
+        self.fd: int | None = None
+        self.held = True
+
+    def __enter__(self) -> "_RunLock":
+        try:
+            path = state_path().with_name("sensors.lock")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+            fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self.held = False
+        except OSError:
+            pass                                     # can't even make a lock file (read-only folder): run unlocked rather than not at all
+        return self
+
+    def __exit__(self, *exc) -> None:
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except OSError:
+                pass
+
+
 def run_once() -> dict:
+    with _RunLock() as lock:
+        if not lock.held:
+            return {"time": now(), "first_run": False, "learning": False, "sensors": {}, "recorded": 0, "skipped": "another run is already in progress",
+                    "write_errors": []}
+        return _run_locked()
+
+
+def _run_locked() -> dict:
     t = now()
     state = load_state()
     first_run = "first_run" not in state
@@ -684,7 +736,7 @@ def run_once() -> dict:
     ctx = Ctx(state, t, first_run, learning, load_allow())
     threat_intel.refresh_if_due()                  # no-op unless the person turned known-bad address checking on
     seen: dict = state.setdefault("seen", {})
-    report = {"time": t, "first_run": first_run, "learning": learning, "sensors": {}, "recorded": 0}
+    report = {"time": t, "first_run": first_run, "learning": learning, "sensors": {}, "recorded": 0, "write_errors": []}
     for name, fn in SENSORS.items():
         info = {"ok": True, "findings": 0, "error": ""}
         try:
@@ -699,10 +751,15 @@ def run_once() -> dict:
             info["findings"] += 1
             if t - seen.get(f.key, 0) < COOLDOWN:
                 continue
-            seen[f.key] = t
             extra = dict(f.extra)
             extra.update(entity=f.entity, technique=f.technique, stage=f.stage, key=f.key, sensor=name)
-            record_event("sensor", f.severity, f.event, f.message, **extra)
+            try:
+                record_event("sensor", f.severity, f.event, f.message, **extra)
+            except OSError as exc:
+                # The finding couldn't be written (disk full, read-only folder). Don't mark it as seen: try again next run.
+                report["write_errors"].append(f"couldn't record '{f.event}': {_why(exc)}")
+                continue
+            seen[f.key] = t
             report["recorded"] += 1
         report["sensors"][name] = info
     for k in [k for k, v in seen.items() if t - v > PRUNE_AFTER]:
@@ -717,7 +774,10 @@ def run_once() -> dict:
         state["timer_seen"] = True                              # live monitoring has really been in use: the dead-man's switch may rely on it
     state["last_run"] = t
     state["last_report"] = {k: v for k, v in report.items() if k != "sensors"} | {"sensors": {n: {"ok": i["ok"], "error": i["error"]} for n, i in report["sensors"].items()}}
-    save_state(state)
+    try:
+        save_state(state)
+    except OSError as exc:
+        report["write_errors"].append(f"couldn't save what was learned: {_why(exc)}")
     return report
 
 
@@ -744,9 +804,7 @@ def allow_path_entry(path: str) -> bool:
         exes.append(path)
     p = allow_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data))
-    tmp.replace(p)
+    _atomic_write(p, json.dumps(data))
     return True
 
 
@@ -775,12 +833,16 @@ def main() -> int:
         r = run_once()
         if a.json:
             print(json.dumps(r))
+        elif r.get("skipped"):
+            print(f"Skipped: {r['skipped']}.")
         else:
             bad = {n: i["error"] for n, i in r["sensors"].items() if not i["ok"]}
             print(f"Sensors ran: {len(r['sensors']) - len(bad)} of {len(r['sensors'])} working, {r['recorded']} new finding(s)"
                   + (" (first run: learned what's normal)" if r["first_run"] else "") + ".")
             for n, e in bad.items():
                 print(f"  {n}: {e}")
+            for w in r.get("write_errors", []):
+                print(f"  [warning] {w}. Check disk space and the permissions of ~/.linuxguardian.", file=sys.stderr)
     else:
         s = status()
         print(json.dumps(s) if a.json else "\n".join(f"{'ok ' if x['ok'] else 'OFF' if x['ok'] is False else '?  '} {x['name']}: {x['description']}" + (f"  [{x['error']}]" if x["error"] else "") for x in s["sensors"]))

@@ -1,7 +1,6 @@
 """Diagnostics: each feature says whether it works, and what is missing when it doesn't."""
 from __future__ import annotations
 
-import os
 import stat
 import sys
 from pathlib import Path

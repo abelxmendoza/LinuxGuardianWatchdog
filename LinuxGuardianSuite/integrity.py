@@ -242,9 +242,10 @@ def read_baseline() -> dict[str, str] | None:
 
 def read_meta() -> dict:
     try:
-        return json.loads(meta_file().read_text())
-    except (OSError, json.JSONDecodeError):
+        data = json.loads(meta_file().read_text())
+    except (OSError, ValueError):
         return {}
+    return data if isinstance(data, dict) else {}
 
 
 def diff(old: dict[str, str], new: dict[str, str]) -> dict[str, list[str]]:
@@ -296,8 +297,11 @@ def do_check() -> int:
     docs_prefix = str(home() / "Documents") + os.sep
     # A new file in Documents is routine. A new file where programs start from (autostart, shell
     # start-up, ssh keys, user services, /etc hooks) is exactly what persistence looks like.
-    changes["new_persistence"] = [p for p in changes["new"] if not p.startswith(docs_prefix)]
-    changes["new"] = [p for p in changes["new"] if p.startswith(docs_prefix)]
+    def _starts_programs(p: str) -> bool:
+        return not p.startswith(docs_prefix) or os.sep + ".git" + os.sep in p        # a new git hook runs a program on commit: it is persistence
+
+    changes["new_persistence"] = [p for p in changes["new"] if _starts_programs(p)]
+    changes["new"] = [p for p in changes["new"] if not _starts_programs(p)]
     # Editing your own documents is routine. Where programs start from is not. And many documents changing at once is not editing.
     docs_changed = [p for k in ("modified", "missing") for p in changes[k] if p.startswith(docs_prefix) and os.sep + ".git" + os.sep not in p]
     burst = len(docs_changed) >= BURST

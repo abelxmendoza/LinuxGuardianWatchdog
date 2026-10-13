@@ -157,6 +157,7 @@ valid_pid() {
   case "$1" in
     ''|*[!0-9]*|0*) return 1 ;;
   esac
+  [ "${#1}" -le 7 ] || return 1          # Linux process ids never have more than 7 digits (pid_max is at most 4194304)
   [ "$1" -gt 1 ] && [ "$1" -ne "$$" ] && [ "$1" -ne "$PPID" ]
 }
 
@@ -189,8 +190,9 @@ do_kill_name() {
   local pids
   # An empty or tiny pattern matches (nearly) every process: `pgrep -f ""` lists everything. Refuse those, only ever look at YOUR
   # processes, and never include this script or the shell that started it.
-  if [ "${#name}" -lt 3 ] || [ -z "${name//[^[:alnum:]]/}" ]; then
-    lg_error "Refusing: '$name' is too short or too vague a name. Use at least 3 characters of the program's name."
+  local letters="${name//[^[:alnum:]]/}"
+  if [ "${#letters}" -lt 3 ]; then
+    lg_error "Refusing: '$name' is too short or too vague a name. Use at least 3 letters or digits of the program's name."
     return 2
   fi
   # `pgrep -f` matches anything whose command line CONTAINS the text, and this script's own command line (and the subshell running

@@ -50,7 +50,7 @@ class CoverageView(Gtk.Box):
     def _got(self, code: int, lines: list[str]) -> None:
         try:
             s = json.loads("".join(lines))
-        except json.JSONDecodeError:
+        except ValueError:
             _clear(self.summary)
             self.summary.append(_label("Couldn't build the coverage map: " + (lines[-1] if lines else ""), "omega-critical"))
             return

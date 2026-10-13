@@ -53,3 +53,11 @@ def test_the_session_hook_also_catches_files_a_fixture_forgot(tmp_path):
                        capture_output=True, text=True, cwd=tmp_path)
     assert r.returncode == 0 and find_setuid(base) == []
     assert "removed them" in r.stderr + r.stdout
+
+
+def test_no_test_uses_monkeypatch_undo():
+    """`monkeypatch.undo()` also undoes the environment fixtures that point LG_HOME and HOME at a temp folder, so a test that calls it
+    quietly starts reading (and could write) the real ~/.linuxguardian. Restore the one thing you changed instead."""
+    needle = "monkeypatch." + "undo("
+    offenders = [p.name for p in TESTS.glob("test_*.py") if needle in p.read_text() and p.name != "test_hygiene.py"]
+    assert offenders == []

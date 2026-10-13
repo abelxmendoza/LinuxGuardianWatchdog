@@ -85,7 +85,7 @@ def feed_defs() -> dict:
     try:
         urls = json.loads(raw)
         return {n: {**FEEDS.get(n, {"title": n, "what": "test feed"}), "url": u, "min_entries": 0} for n, u in urls.items()}
-    except (json.JSONDecodeError, AttributeError):
+    except (ValueError, AttributeError):
         return FEEDS
 
 
@@ -130,7 +130,7 @@ def _read_json(path: Path) -> dict:
     try:
         d = json.loads(path.read_text())
         return d if isinstance(d, dict) else {}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return {}
 
 

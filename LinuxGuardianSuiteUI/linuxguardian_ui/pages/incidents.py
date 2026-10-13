@@ -78,14 +78,14 @@ class IncidentsView(Gtk.Box):
         def got_status(code: int, lines: list[str]) -> None:
             try:
                 self._status = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 self._status = {}
             self._render_status()
 
         def got_incidents(code: int, lines: list[str]) -> None:
             try:
                 incs = json.loads("".join(lines))
-            except json.JSONDecodeError:
+            except ValueError:
                 incs = []
             self._render_incidents(incs)
 

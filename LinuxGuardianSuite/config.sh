@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # these variables are used by the scripts that source this file
 # Shared configuration for LinuxGuardian Suite scripts.
 # Sourced by every other script in this directory — do not execute directly.
 
@@ -28,9 +29,48 @@ mkdir -p "$LG_BASELINE_DIR" "$LG_CHECKPOINT_DIR" "$LG_QUARANTINE_DIR" \
 # Everything under here (evidence, logs, settings, quarantine) is private to you; a 700 top folder keeps other accounts out of all of it.
 chmod 700 "$LG_HOME" 2>/dev/null || true
 
-# Allow the user to override any of the above in ~/.linuxguardian/config
-# shellcheck source=/dev/null
-[ -f "$LG_CONFIG_FILE" ] && source "$LG_CONFIG_FILE"
+# Settings you may override in ~/.linuxguardian/config, one per line:  NAME=value  (quotes optional, '#' starts a comment).
+# The file is READ, never run: it is data, not a script. Only the names below are accepted, values are taken literally (only $HOME,
+# ${HOME} and a leading ~/ are expanded; $(...) and backticks stay plain text), and the file is ignored altogether unless it is a plain
+# file you own that other users can't write to. A file that could run code every time any LinuxGuardian script starts would be a
+# hiding place for an intruder, and nothing watches it the way shell start-up files are watched.
+LG_CONFIG_ALLOWED=" LG_CLAM_EXCLUDE_DIRS_QUICK LG_CLAM_EXCLUDE_DIRS_FULL LG_MONITORED_DIRS_DEFAULT LG_HONEYPOT_DIR "
+
+lg_load_config() {
+  local f="$LG_CONFIG_FILE" line name value
+  [ -e "$f" ] || [ -L "$f" ] || return 0
+  if [ -L "$f" ] || [ ! -f "$f" ] || [ "$(stat -c %u "$f" 2>/dev/null)" != "$(id -u)" ]; then
+    echo "[WARN] Ignoring $f: it must be a regular file that you own." >&2
+    return 0
+  fi
+  if [ -n "$(find "$f" -maxdepth 0 -perm /002 2>/dev/null)" ] \
+     || { [ "$(stat -c %g "$f" 2>/dev/null)" != "$(id -g)" ] && [ -n "$(find "$f" -maxdepth 0 -perm /020 2>/dev/null)" ]; }; then
+    echo "[WARN] Ignoring $f: other users can write to it. Fix with: chmod go-w \"$f\"" >&2
+    return 0
+  fi
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*|[[:space:]]*\#*) continue ;; esac
+    if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Z][A-Z0-9_]*)=(.*)$ ]]; then
+      name="${BASH_REMATCH[2]}"
+      value="${BASH_REMATCH[3]}"
+      case "$LG_CONFIG_ALLOWED" in
+        *" $name "*) ;;
+        *) echo "[WARN] $f: '$name' can't be set here (allowed:${LG_CONFIG_ALLOWED% })." >&2; continue ;;
+      esac
+      # shellcheck disable=SC2088  # a literal "~/" prefix is exactly what is being matched below
+      case "$value" in
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;                               # single quotes: exactly as written
+        \"*\") value="${value#\"}"; value="${value%\"}"; value="${value//\$\{HOME\}/$HOME}"; value="${value//\$HOME/$HOME}" ;;
+        '~/'*) value="$HOME/${value#\~/}" ;;
+        *) value="${value//\$\{HOME\}/$HOME}"; value="${value//\$HOME/$HOME}" ;;
+      esac
+      printf -v "$name" '%s' "$value"
+    else
+      echo "[WARN] $f: ignoring a line that isn't NAME=value." >&2
+    fi
+  done < "$f"
+}
+lg_load_config
 
 if [ -t 1 ]; then
   LG_C_RED=$'\033[0;31m'

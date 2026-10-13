@@ -209,7 +209,7 @@ class ProcessesPage(Gtk.Box):
                 continue
             try:
                 row = json.loads(line)
-            except json.JSONDecodeError:
+            except ValueError:
                 continue
             row["cpu"] = float(row.get("cpu") or 0)
             row["mem"] = float(row.get("mem") or 0)
