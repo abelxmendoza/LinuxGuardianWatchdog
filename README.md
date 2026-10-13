@@ -13,10 +13,41 @@ remediation — orchestrated by a native desktop app, with all data kept local
 to the machine. The GUI also carries over the original's dark "Omega
 Black-Ops" theme (purple/red/yellow accents on near-black).
 
-> **Status: personal-use release candidate, not a distribution.** Everything below is implemented and tested (see
-> [docs/TESTING.md](docs/TESTING.md) and [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) for what is and isn't verified). It is run from a
+> **Status: Phase 1.0 stabilization complete: ready for limited daily use by its owner (class B), not a distribution.** It is run from a
 > checkout of this repository on Ubuntu 22.04 (GNOME on X11), not installed from a package. It reduces risk and makes problems visible;
-> it does **not** guarantee protection against malware or attacks. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> it does **not** guarantee protection against malware or attacks. What was tested, what was not, and what is still open is written down in
+> [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) and [docs/TESTING.md](docs/TESTING.md); plans are in [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## What it does
+
+**Principle:** it watches and explains; you decide. Nothing is deleted, killed, blocked or changed automatically. Actions that change the
+machine are previewed first, ask for your confirmation, are undoable where possible, and the few that need administrator rights go through
+a fixed script and one polkit password prompt. Security should protect you, not fight you: routine changes (such as editing your own code
+in a development checkout, or running ROS 2 / PX4 / Gazebo / Docker) are recorded quietly rather than raised as alarms.
+
+| Area | What you get |
+|---|---|
+| **Dashboard** | One-button scans (ClamAV + rkhunter), a scored posture audit (firewall, SSH, updates, sudoers, disk...), scanner health (definitions age, rootkit baseline), live activity. |
+| **Live monitoring** (systemd user timer, every 5 min) | 12 read-only sensors: logins, processes, network (with free known-bad address lists), start-up entries, accounts, USB, dropped programs, LinuxGuardian's own files, tripwires on SSH keys and sudo/login/package-source rules, decoy files, defenses switched off, new setuid programs. A dead-man's switch warns if monitoring itself stops. |
+| **Incidents** | Related events grouped into plain-language stories with next steps, a **Timeline** (repeats folded, mark as seen), one-click read-only evidence bundles, and an honest **attack coverage map** (what is covered, partly covered, not covered). Optional, opt-in AI explainer (local Ollama or Claude): redacted, advisory only, read-only checks. |
+| **Alert policy** | Every event is an *incident* (something may have happened), a *finding* (a standing weakness) or *information*. Desktop pop-ups only for warning-and-above incidents and critical findings. A risk you accept stays visible but stops nagging; it never hides an unrelated incident. |
+| **Malware** | Findings explained in plain language, re-verification, **reversible quarantine**, restore, permanent delete only on request; a guide to the kinds of Linux malware. |
+| **Hardening** | A checklist of weak settings with previewed, undoable fixes. |
+| **VPN** | Tailscale + Proton VPN status, leak and conflict diagnostics. |
+| **Processes** | List, filter, explain, end or force-kill with confirmation (safe-guarded: critical names refused, no mass kills). |
+| **Cleaner** | Browser and system caches, dry-run first. |
+| **Updates** | Pending security/system/third-party/snap updates, one-click install via polkit, release guard, pinned stacks (ROS 2, Gazebo, NVIDIA) never forced. |
+| **Exposure** | What is listening and who can reach it; a ROS 2-aware firewall helper that adds narrow `ufw` rules for one robot, previewed and removable. |
+| **Apps** | Export your app list and plan/install it on another Ubuntu laptop (no repos, keys or dotfiles). |
+| **File integrity** | SHA-256 baseline of documents and persistence locations (shell files, `~/.ssh`, autostart, git hooks); development checkouts are treated sensibly. |
+| **Self-care** | Title-bar **Terminal** button (every feature as a copyable command if the app breaks), **Health** button (the app checking its own files, permissions and state), per-tab crash safety and a crash log. |
+
+## Status of verification (summary)
+
+1398 automated tests pass (unit, integration, end-to-end through the real window, fuzzing, failure and packaging tests), plus 8 shell
+suites; ruff, bandit, shellcheck and pip-audit are clean; line coverage is 79 %. Root-level tools (`apt`, `ufw`, `freshclam`, `rkhunter`,
+`pkexec`) are tested against stand-ins only; the GitHub Actions workflows have not yet run on GitHub; ROS 2 / PX4 / Gazebo workloads and
+real-attack detection are untested. Details and numbers: [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md).
 
 ## Architecture
 
@@ -83,12 +114,19 @@ LinuxGuardianWatchdog/
 │   ├── linux_ros_firewall.sh    # Preview/add/remove narrow ufw rules for a robot
 │   ├── linux_apps.sh            # ...and the installer for them
 │   ├── events.py                # Shared security-event format written to ~/.linuxguardian/incidents/
+│   ├── audit_events.py          # Risk acceptance + audit findings as events
+│   ├── process_inventory.py     # Explains what each running process is (read-only)
+│   ├── scan_store.py            # Saved scan results
 │   ├── install_scheduler.sh  # Installs systemd user timers for automation
 │   └── modules.conf.example
 ├── LinuxGuardianSuiteUI/     # Native GTK4 / libadwaita desktop app (Python)
-│   └── linuxguardian_ui/
-├── docs/                     # Architecture notes and roadmap
-└── tests/                    # Script sanity tests
+│   ├── linuxguardian_ui/     # window, pages (tabs), helpers
+│   └── tests/                # pytest suite (unit, integration, end-to-end, security, packaging)
+├── docs/                     # ARCHITECTURE, ROADMAP, TESTING, RELEASE_READINESS
+├── tests/                    # Shell suites for the privileged scripts (run against stub pkexec/apt/ufw)
+├── .github/                  # CI (tests only; no deploy), CodeQL, Dependabot
+├── ruff.toml, .bandit        # Static-analysis configuration
+└── requirements-dev.txt      # Pinned test/lint tools (not needed to run the app)
 ```
 
 ## Requirements
@@ -113,7 +151,9 @@ sudo apt install python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
 The Python code itself uses only the standard library plus PyGObject: no `pip install` is needed to run it. Tools for developing and
 testing it are pinned in `requirements-dev.txt`.
 
-## Getting started (scripts only, no GUI yet)
+## Getting started: the scripts (no GUI needed)
+
+Every feature also works from a terminal.
 
 ```bash
 cd LinuxGuardianSuite
@@ -185,6 +225,18 @@ cd LinuxGuardianSuiteUI
 ```
 
 Run `./install_desktop_entry.sh --uninstall` to remove it again.
+
+## Testing
+
+```bash
+python3 -m venv --system-site-packages .venv && .venv/bin/pip install -r requirements-dev.txt
+cd LinuxGuardianSuiteUI && ../.venv/bin/python -m pytest tests -q       # xvfb-run -a ... if you have no display
+cd .. && for t in tests/test_*.sh; do bash "$t"; done                    # shell suites
+.venv/bin/ruff check . && .venv/bin/bandit -q -ll -c .bandit -r LinuxGuardianSuite LinuxGuardianSuiteUI/linuxguardian_ui
+```
+
+Tests run as an ordinary user in throwaway folders; they never touch your firewall, real processes or `~/.linuxguardian`. See
+[docs/TESTING.md](docs/TESTING.md).
 
 ## License
 

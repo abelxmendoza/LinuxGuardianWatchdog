@@ -1,7 +1,8 @@
 # Roadmap
 
-This is a bootstrap scaffold. Rough order of what's left, mirroring the
-macOS original's feature set:
+Status: Phase 1.0 stabilization is done (see RELEASE_READINESS.md): the feature set below marked `[x]` is implemented and tested; the project
+is at class B (limited daily use by its owner). The unchecked items are ideas, not commitments. Next priority is *verification*, not features:
+a green CI run on GitHub, hand-testing the privileged flows on a disposable Ubuntu machine, and a longer soak on the real laptop.
 
 ## Phase 1 — Core scripts (partially done)
 - [x] `config.sh`, `utils.sh` — shared shell helpers
@@ -65,6 +66,8 @@ macOS original's feature set:
 - [x] Reliability pass after the architecture review: incident / finding / information classification and notification policy, persistent
       risk acceptance, quiet development checkouts, narrower integrity scope, honeypot grace during our own scans, own-timer baseline
       updates, safe process-kill and cache-clean inputs with tests, test fixtures that clean up
+- [x] Phase 1.0 stabilization: 1398 tests (integration, end-to-end, fuzz, failure, packaging), CI config, static analysis, 14 defects fixed
+      (config no longer executed as shell, sensor run lock, kill/PID guards, quarantine verification, notification boundary, installer exit codes ...)
 - [ ] Next from the review (not built yet): fold the overlapping start-up watchers (`integrity`, `autoruns`, `tripwires`) and health views
       (`diagnostics`, `scanner_health`, `self_check`) into one each; event retention; decide whether the AI stack earns its maintenance
 - [ ] Remaining gaps the map names: log-wipe detection, ransomware burst tripwire + backup check, sustained CPU/GPU alert, loaded kernel modules check

@@ -18,16 +18,20 @@ SwiftUI-as-orchestrator and bash-as-worker.
 
 ## Local data
 
-All state lives under `~/.linuxguardian/`:
+All state lives under `~/.linuxguardian/` (mode 700); these JSON/text files are the only state shared between the scripts and the GUI:
 
 ```
 ~/.linuxguardian/
-├── config                # user config, sourced by config.sh
+├── config                # optional user settings; PARSED as KEY=value data by config.sh (never executed as shell)
 ├── baselines/            # SHA-256 integrity baselines per monitored dir
 ├── checkpoints/          # resumable scan progress
-├── quarantine/           # remediation staging area (never auto-deleted)
-├── logs/
-└── incidents/            # structured incident records for the UI
+├── quarantine/           # reversibly quarantined files (never auto-deleted)
+├── scans/                # saved scan results
+├── state/                # sensor memory, accepted risks (accepted_risks.json), timeline acknowledgements
+├── ai.json               # optional AI settings (off by default)
+├── backups/              # daily snapshots of the app's own state, used to recover if it is damaged
+├── logs/                 # script logs and app-errors.log (crash log)
+└── incidents/            # one JSON file per security event, read by the Timeline, incidents and notifications
 ```
 
 ## Script contract
