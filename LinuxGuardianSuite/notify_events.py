@@ -101,6 +101,16 @@ def compose(entries: list) -> tuple[str, str, bool]:
     return f"{APP_NAME}: {len(entries)} new findings", bullets + more, critical
 
 
+def worth_a_popup(e) -> bool:
+    """Only things that may have HAPPENED to this machine interrupt you. A standing weakness (the security audit, exposure, rootkit-check
+    warnings) is in the Timeline and the dashboard, and only a critical one is announced, once. Routine information never is."""
+    if e.kind == "incident":
+        return RANK[e.severity] >= RANK["warning"]
+    if e.kind == "finding":
+        return e.severity == "critical"
+    return False
+
+
 def run_send(now: float | None = None) -> int:
     """Returns how many findings were announced (0 when disabled, first run, or nothing new)."""
     now = time.time() if now is None else now
@@ -111,10 +121,7 @@ def run_send(now: float | None = None) -> int:
     if last is None:
         _write_watermark(now)       # first run: start from now, don't replay history
         return 0
-    fresh = [
-        e for e in load_entries()
-        if e.last_ts > last and e.status != "resolved" and RANK[e.severity] >= RANK["warning"]
-    ]
+    fresh = [e for e in load_entries() if e.last_ts > last and e.status != "resolved" and worth_a_popup(e)]
     _write_watermark(now)
     if not fresh:
         return 0

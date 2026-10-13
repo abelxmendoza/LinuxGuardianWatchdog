@@ -42,6 +42,9 @@ lightdm sddm NetworkManager systemd-logind systemd-journald systemd-udevd
 dbus-daemon polkitd pulseaudio pipewire wireplumber udisksd upowerd
 wpa_supplicant sshd containerd dockerd "
 
+# The list above wraps over several lines; match against it as one space-separated string (names that began a line were never matched).
+CRITICAL_NAMES=" ${CRITICAL_NAMES//$'\n'/ } "
+
 is_critical_name() {
   case "$CRITICAL_NAMES" in *" $1 "*) return 0 ;; esac
   return 1
@@ -148,9 +151,22 @@ do_list() {
   done <<< "$snapshot"
 }
 
+# A process id must be a plain positive number. Anything else ("", "0", "-1", "1 2", "$(...)") can mean a whole process GROUP or every
+# process you own to `kill`, so it is refused before anything is signalled. PID 1 and this script's own shell are never targets.
+valid_pid() {
+  case "$1" in
+    ''|*[!0-9]*|0*) return 1 ;;
+  esac
+  [ "$1" -gt 1 ] && [ "$1" -ne "$$" ] && [ "$1" -ne "$PPID" ]
+}
+
 do_kill() {
   local pid="$1"
-  if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+  if ! valid_pid "$pid"; then
+    lg_error "Refusing to signal '$pid': give one process id (a plain number above 1), not this script or its parent."
+    return 2
+  fi
+  if ! kill -0 "$pid" 2>/dev/null; then
     lg_error "No such process: $pid"
     return 1
   fi
@@ -165,19 +181,51 @@ do_kill() {
   fi
 }
 
+# Most processes one name may match before this refuses and asks for something more specific (override for tests: LG_KILL_MAX).
+KILL_NAME_MAX="${LG_KILL_MAX:-25}"
+
 do_kill_name() {
   local name="$1"
-  local self_pid=$$
   local pids
-  pids="$(pgrep -f "$name" | grep -vx "$self_pid" || true)"
+  # An empty or tiny pattern matches (nearly) every process: `pgrep -f ""` lists everything. Refuse those, only ever look at YOUR
+  # processes, and never include this script or the shell that started it.
+  if [ "${#name}" -lt 3 ] || [ -z "${name//[^[:alnum:]]/}" ]; then
+    lg_error "Refusing: '$name' is too short or too vague a name. Use at least 3 characters of the program's name."
+    return 2
+  fi
+  # `pgrep -f` matches anything whose command line CONTAINS the text, and this script's own command line (and the subshell running
+  # pgrep for it) contains the name it was given. Leave out this tool itself, in every form.
+  pids=""
+  local cand cargs
+  while read -r cand; do
+    [ -z "$cand" ] && continue
+    cargs="$(ps -o args= -p "$cand" 2>/dev/null || true)"
+    [ -z "$cargs" ] && continue                                  # already gone (e.g. the short-lived subshell)
+    [[ "$cargs" == *linux_process_manager.sh* ]] && continue
+    [ "$cand" = "$$" ] || [ "$cand" = "$PPID" ] && continue
+    pids+="$cand"$'\n'
+  done < <(pgrep -u "$(id -u)" -f -- "$name" || true)
+  pids="${pids%$'\n'}"
   if [ -z "$pids" ]; then
-    lg_warn "No running process matches '$name'"
+    lg_warn "No running process of yours matches '$name'"
     return 0
+  fi
+  local count
+  count="$(grep -c . <<< "$pids")"
+  if [ "$count" -gt "$KILL_NAME_MAX" ]; then
+    lg_error "Refusing: '$name' matches $count of your processes. Be more specific, or stop one at a time with --kill PID."
+    return 2
   fi
   local sig="TERM"
   [ "$FORCE" -eq 1 ] && sig="KILL"
   echo "$pids" | while read -r pid; do
-    [ -z "$pid" ] && continue
+    valid_pid "$pid" || continue
+    local comm
+    comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')"
+    if is_critical_name "$comm"; then
+      lg_warn "Skipped PID $pid ($comm): ending it can log you out or take down the desktop. Use --kill $pid if you really mean it."
+      continue
+    fi
     if kill "-$sig" "$pid" 2>/dev/null; then
       lg_ok "Sent SIG$sig to PID $pid ($name)"
       lg_record_incident "process" "info" "Killed PID $pid ($name) with SIG$sig"

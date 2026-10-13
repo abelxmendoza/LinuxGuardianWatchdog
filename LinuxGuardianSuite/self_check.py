@@ -186,11 +186,14 @@ def judge_app_files(root: Path | None = None, create: bool = True) -> dict:
                 "text": f"All {len(files)} app files match the trusted baseline" + (f" (version {g['head'][:8]})." if g["head"] else ".")}
     paths = diff["changed"] + diff["added"] + diff["removed"]
     detail = [f"changed: {p}" for p in diff["changed"]] + [f"new: {p}" for p in diff["added"]] + [f"missing: {p}" for p in diff["removed"]]
-    # Anything that is serious regardless of git: a new, unknown program file, or a file anyone can write to.
-    unknown_new = [p for p in diff["added"] if not g["present"] or p not in g["tracked"]]
+    # Serious regardless of git: a file anyone can write to, or one owned by another user. A brand-new program file is also serious when
+    # there is no git history to explain it. In a git checkout, an uncommitted new file is what DEVELOPING looks like (and is visible to
+    # `git status`), so there it is a warning in the health window and a quiet note in the Timeline, never an alarm.
+    unknown_new = [p for p in diff["added"] if not g["present"]]
+    uncommitted = [p for p in diff["added"] if g["present"] and p not in g["tracked"]]
     writable = [p for p in paths if p in files and files[p]["mode"] & stat.S_IWOTH]
     foreign = [p for p in paths if p in files and files[p]["uid"] not in (os.getuid(), 0)]
-    base = {"id": "app_files", "title": "App files", "detail": detail[:MAX_LIST], "paths": paths, "repair": "accept"}
+    base = {"id": "app_files", "title": "App files", "detail": detail[:MAX_LIST], "paths": paths, "repair": "accept", "dev_checkout": g["present"]}
     if unknown_new or writable or foreign:
         why = []
         if unknown_new:
@@ -199,12 +202,20 @@ def judge_app_files(root: Path | None = None, create: bool = True) -> dict:
             why.append("files anyone on this laptop can modify")
         if foreign:
             why.append("files owned by another user")
-        return {**base, "level": "critical", "text": f"{n} app file(s) differ from the baseline, including " + " and ".join(why) + ": " + _short(paths) + ". "
+        return {**base, "level": "critical", "sensor_level": "critical",
+                "text": f"{n} app file(s) differ from the baseline, including " + " and ".join(why) + ": " + _short(paths) + ". "
                 "If you didn't do this, treat it as tampering."}
     if g["present"] and not g["dirty"] and manifest.get("head") and g["head"] != manifest["head"]:
-        return {**base, "level": "info", "text": f"The app was updated ({manifest['head'][:8]} to {g['head'][:8]}): {n} file(s) differ from your saved baseline, "
+        return {**base, "level": "info", "sensor_level": "info",
+                "text": f"The app was updated ({manifest['head'][:8]} to {g['head'][:8]}): {n} file(s) differ from your saved baseline, "
                 "and they match the published version. Accept it to re-record the baseline."}
-    return {**base, "level": "warning", "text": f"{n} app file(s) were modified since the baseline and it isn't a clean update: {_short(paths)}. "
+    if g["present"]:
+        what = f"{len(diff['changed'])} changed and {len(uncommitted)} new" if uncommitted else f"{n} changed"
+        return {**base, "level": "warning", "sensor_level": "info",
+                "text": f"{what} app file(s) with uncommitted changes in this git checkout: {_short(paths)}. That is normal while you are editing LinuxGuardian; "
+                "if you aren't, look at `git status` in the app folder."}
+    return {**base, "level": "warning", "sensor_level": "warning",
+            "text": f"{n} app file(s) were modified since the baseline and it isn't a clean update: {_short(paths)}. "
             "If you edited them yourself, accept the change. If not, treat it as tampering."}
 
 
@@ -418,9 +429,14 @@ def check(create_baseline: bool = True) -> dict:
 
 
 def sensor_findings() -> list[dict]:
-    """For the live sensors: only the app-file verdict, as plain dicts (level critical/warning only)."""
+    """For the live sensors: the app-file verdict, as plain dicts, with the severity the SENSOR should use (`sensor_level`).
+
+    The health window may call uncommitted edits in a git checkout a warning; the sensor treats them as routine information, so editing
+    LinuxGuardian never raises an alarm or a desktop notification. Tampering signs (writable or foreign-owned files, new program files
+    with no git history to explain them) stay critical.
+    """
     c = judge_app_files(create=True)
-    if c["level"] in ("critical", "warning") and c["paths"]:
+    if c.get("paths") and c.get("sensor_level") in ("critical", "warning", "info") and c["level"] != "ok":
         return [c]
     return []
 

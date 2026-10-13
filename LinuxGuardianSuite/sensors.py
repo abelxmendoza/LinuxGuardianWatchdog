@@ -649,7 +649,8 @@ def sensor_self(ctx: Ctx) -> list[Finding]:
     for c in self_check.sensor_findings():
         key = "self:app:" + hashlib.sha1("|".join(c["paths"]).encode()).hexdigest()[:12]
         root = self_check.app_root()
-        out.append(Finding(key, c["level"], "app_tampered" if c["level"] == "critical" else "app_modified", c["text"],
+        sev = c.get("sensor_level", c["level"])
+        out.append(Finding(key, sev, "app_tampered" if sev == "critical" else "app_modified", c["text"],
                            [str(root / p) for p in c["paths"][:6]], "T1554", "persistence", {"files": c["paths"][:20]}))
     return out
 

@@ -39,7 +39,7 @@ from events import lg_home  # noqa: E402
 
 ARM_GAP = 10                        # the armed access time sits this many seconds before the modification time
 SCAN_GRACE = 90                     # reads this close to one of our own scans are ours
-SCAN_PROGRAMS = ("linux_guardian.sh", "linux_watchdog.sh", "integrity.py", "clamscan", "clamdscan", "rkhunter")
+SCAN_PROGRAMS = ("linux_guardian.sh", "clamscan", "clamdscan", "rkhunter")     # what could read a decoy; the integrity check skips them and is not in this list
 
 SPECS = [
     {"id": "ssh", "rel": ".ssh/old_deploy_key", "what": "a private SSH key", "dir_mode": 0o700},

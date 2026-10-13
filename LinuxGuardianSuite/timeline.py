@@ -29,7 +29,7 @@ SUITE_DIR = Path(__file__).resolve().parent
 if str(SUITE_DIR) not in sys.path:
     sys.path.insert(0, str(SUITE_DIR))
 
-from events import SEVERITIES, incident_dir, lg_home  # noqa: E402
+from events import SEVERITIES, incident_dir, kind_of, lg_home  # noqa: E402
 
 RANK = {"info": 0, "warning": 1, "critical": 2}
 _FILENAME_TS = re.compile(r"^(\d{8})-(\d{6})")
@@ -47,6 +47,7 @@ class Entry:
     last_ts: float
     acknowledged: bool = False
     extra: dict = field(default_factory=dict)
+    kind: str = "finding"                     # incident | finding | information (events.kind_of)
 
 
 def _state_path() -> Path:
@@ -128,7 +129,8 @@ def load_entries(directory: Path | None = None) -> list[Entry]:
         if entry is None:
             extra = {k: v for k, v in record.items()
                      if k not in {"timestamp", "category", "severity", "message", "status"}}
-            folded[key] = Entry(key, category, record["severity"], status, message, 1, ts, ts, extra=extra)
+            folded[key] = Entry(key, category, record["severity"], status, message, 1, ts, ts, extra=extra,
+                                kind=kind_of(category, record["severity"], str(record.get("event") or "")))
         else:
             entry.count += 1
             if ts >= entry.last_ts:
@@ -149,6 +151,7 @@ def select(
     category: str | None = None,
     search: str | None = None,
     include_acknowledged: bool = False,
+    kind: str | None = None,
 ) -> list[Entry]:
     now = time.time() if now is None else now
     needle = (search or "").lower()
@@ -159,6 +162,8 @@ def select(
         if RANK[e.severity] < RANK[min_severity]:
             continue
         if category and e.category != category:
+            continue
+        if kind and e.kind != kind:
             continue
         if needle and needle not in e.message.lower() and needle not in e.category.lower():
             continue

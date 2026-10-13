@@ -55,6 +55,8 @@ EOF
 
   systemctl --user daemon-reload
   systemctl --user enable --now "$TIMER_NAME"
+  # Our own new files must not be reported by the daily integrity check as something that appeared in a start-up location.
+  python3 "$SCRIPT_DIR/integrity.py" --accept "$UNIT_DIR/$SERVICE_NAME" "$UNIT_DIR/$TIMER_NAME" >/dev/null 2>&1 || true
   lg_ok "Installed and enabled $TIMER_NAME (systemctl --user list-timers to verify)"
 }
 
@@ -89,6 +91,7 @@ WantedBy=timers.target
 EOF
   systemctl --user daemon-reload
   systemctl --user enable --now "$SENSORS_TIMER"
+  python3 "$SCRIPT_DIR/integrity.py" --accept "$UNIT_DIR/$SENSORS_SERVICE" "$UNIT_DIR/$SENSORS_TIMER" >/dev/null 2>&1 || true
   lg_ok "Live monitoring is on ($SENSORS_TIMER)."
 }
 
@@ -96,6 +99,7 @@ uninstall_sensors() {
   systemctl --user disable --now "$SENSORS_TIMER" 2>/dev/null || true
   # ${VAR:?} makes the shell stop with an error instead of ever deleting a bare "/" if a variable were empty.
   rm -f "${UNIT_DIR:?}/${SENSORS_SERVICE:?}" "${UNIT_DIR:?}/${SENSORS_TIMER:?}"
+  python3 "$SCRIPT_DIR/integrity.py" --forget "$UNIT_DIR/$SENSORS_SERVICE" "$UNIT_DIR/$SENSORS_TIMER" >/dev/null 2>&1 || true
   systemctl --user daemon-reload
   lg_ok "Live monitoring is off."
 }
@@ -103,6 +107,7 @@ uninstall_sensors() {
 uninstall_units() {
   systemctl --user disable --now "$TIMER_NAME" 2>/dev/null || true
   rm -f "$UNIT_DIR/$SERVICE_NAME" "$UNIT_DIR/$TIMER_NAME"
+  python3 "$SCRIPT_DIR/integrity.py" --forget "$UNIT_DIR/$SERVICE_NAME" "$UNIT_DIR/$TIMER_NAME" >/dev/null 2>&1 || true
   systemctl --user daemon-reload
   lg_ok "Removed scheduled scan timer."
 }

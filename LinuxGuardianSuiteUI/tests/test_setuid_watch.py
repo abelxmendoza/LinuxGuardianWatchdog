@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "LinuxGuardianSuite"))
 import incidents  # noqa: E402
 import sensors as sn  # noqa: E402
 import setuid_watch as sw  # noqa: E402
+from conftest import strip_special_bits  # noqa: E402
 from test_sensors import DAY, at, box, sensor_events, stub  # noqa: E402,F401  (box is a fixture)
 
 HOUR = 3600
@@ -27,7 +28,8 @@ def tree(box, monkeypatch):
     root = box / "suroots"
     stub(box / "bin", "dpkg", 'if [ -n "$PKG_OWNED" ] && [ "$3" = "$PKG_OWNED" ]; then echo "somepkg: $3"; exit 0; fi\necho no >&2; exit 1')
     monkeypatch.setenv("LG_SETUID_ROOTS", str(root))
-    return root
+    yield root
+    strip_special_bits(root)                       # leave nothing behind that the live setuid sensor would call a critical finding in /tmp
 
 
 def mk(path: Path, mode: int, text: str = "x") -> Path:

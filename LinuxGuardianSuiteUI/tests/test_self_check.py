@@ -138,7 +138,7 @@ def test_edits_that_are_not_committed_are_a_warning_even_with_git(env):
     files_check()
     write(app / "LinuxGuardianSuite/sensors.py", "print('edited, not committed')\n", 0o755)
     c = files_check()
-    assert c["level"] == "warning" and "isn't a clean update" in c["text"]
+    assert c["level"] == "warning" and "uncommitted changes" in c["text"] and c["sensor_level"] == "info"
 
 
 def test_a_new_commit_plus_uncommitted_edits_is_not_a_clean_update(env):
@@ -151,16 +151,40 @@ def test_a_new_commit_plus_uncommitted_edits_is_not_a_clean_update(env):
     git(app, "commit", "-qam", "two")
     write(app / "LinuxGuardianSuite/utils.sh", "echo sneaky\n", 0o755)         # an edit on top that nobody committed
     c = files_check()
-    assert c["level"] == "warning" and "isn't a clean update" in c["text"]
+    assert c["level"] == "warning" and "uncommitted changes" in c["text"] and c["sensor_level"] == "info"
 
 
-def test_an_untracked_new_file_is_critical_even_with_git(env):
+def test_an_uncommitted_new_file_in_a_git_checkout_is_development_not_tampering(env):
     app = env / "app"
     git(app, "init", "-q")
     git(app, "add", "-A")
     git(app, "commit", "-qm", "one")
     files_check()
-    write(app / "LinuxGuardianSuite/dropped.sh", "curl x | sh\n", 0o755)
+    write(app / "LinuxGuardianSuite/new_feature.py", "x = 1\n", 0o755)
+    c = files_check()
+    assert c["level"] == "warning" and c["sensor_level"] == "info" and c["dev_checkout"] is True
+    assert "1 new" in c["text"] and "uncommitted" in c["text"] and "git status" in c["text"]
+
+
+def test_a_dropped_file_with_no_git_history_to_explain_it_is_still_critical(env):
+    files_check()
+    write(env / "app/LinuxGuardianSuite/dropped.sh", "curl x | sh\n", 0o755)
+    c = files_check()
+    assert c["level"] == "critical" and c["sensor_level"] == "critical" and c["dev_checkout"] is False
+
+
+def test_tampering_signs_stay_critical_even_in_a_git_checkout(env, monkeypatch):
+    app = env / "app"
+    git(app, "init", "-q")
+    git(app, "add", "-A")
+    git(app, "commit", "-qm", "one")
+    files_check()
+    write(app / "LinuxGuardianSuite/sensors.py", "print('evil')\n", 0o777)             # anyone can write to it
+    c = files_check()
+    assert c["level"] == "critical" and c["sensor_level"] == "critical" and "anyone on this laptop" in c["text"]
+    write(app / "LinuxGuardianSuite/sensors.py", "print('evil')\n", 0o755)
+    real = os.getuid()
+    monkeypatch.setattr(sc.os, "getuid", lambda: real + 777)                           # owned by someone else
     assert files_check()["level"] == "critical"
 
 
@@ -412,3 +436,69 @@ def test_daily_upkeep_runs_from_the_sensors(box, monkeypatch):
     write(box / "lg/state/sensors.json", "{}", 0o600)
     sn.run_once()
     assert (box / "lg/backups").is_dir()
+
+
+# ------------------------------------------------ development must not raise alarms
+def init_repo(box: Path) -> Path:
+    app = box / "approot"
+    make_app(app)
+    git(app, "init", "-q")
+    git(app, "add", "-A")
+    git(app, "commit", "-qm", "one")
+    return app
+
+
+def test_editing_the_app_in_its_git_checkout_is_a_quiet_note_not_an_incident_or_a_popup(box, monkeypatch):
+    import notify_events as ne
+    app = init_repo(box)
+    sn.run_once()                                                        # baseline
+    ne.run_send(time.time() - 100)
+    write(app / "LinuxGuardianSuite/sensors.py", "print('edited')\n", 0o755)
+    write(app / "LinuxGuardianSuite/brand_new.py", "x = 1\n", 0o755)
+    at(monkeypatch, 600)
+    sn.run_once()
+    [e] = sensor_events(box)
+    assert e["event"] == "app_modified" and e["severity"] == "info"
+    assert incidents.build(days=7, directory=box / "lg" / "incidents", now=time.time() + 60) == []
+    assert ne.run_send(time.time() + 5) == 0
+    write(app / "LinuxGuardianSuite/another.py", "y = 2\n", 0o755)
+    at(monkeypatch, 1200)
+    sn.run_once()
+    assert incidents.build(days=7, directory=box / "lg" / "incidents", now=time.time() + 60) == []      # even repeated notes never become an incident
+
+
+def test_a_writable_app_file_in_a_git_checkout_is_still_a_critical_incident_and_a_popup(box, monkeypatch):
+    import notify_events as ne
+    app = init_repo(box)
+    sn.run_once()
+    ne.run_send(time.time() - 100)
+    write(app / "LinuxGuardianSuite/sensors.py", "print('evil')\n", 0o777)
+    at(monkeypatch, 600)
+    sn.run_once()
+    [e] = sensor_events(box)
+    assert e["event"] == "app_tampered" and e["severity"] == "critical"
+    [inc] = incidents.build(days=7, directory=box / "lg" / "incidents", now=time.time() + 60)
+    assert inc.severity == "critical"
+    assert ne.run_send(time.time() + 5) == 1
+
+
+def test_a_tracked_file_edited_outside_git_is_still_noticed_as_information(box, monkeypatch):
+    app = init_repo(box)
+    sn.run_once()
+    write(app / "LinuxGuardianSuite/utils.sh", "echo tampered\n", 0o755)
+    at(monkeypatch, 600)
+    sn.run_once()
+    [e] = sensor_events(box)
+    assert e["event"] == "app_modified" and e["severity"] == "info" and "utils.sh" in json.dumps(e)
+
+
+def test_without_git_a_modified_file_is_still_a_warning_incident(box, monkeypatch):
+    app = box / "approot"
+    make_app(app)
+    sn.run_once()
+    write(app / "LinuxGuardianSuite/sensors.py", "print('evil')\n", 0o755)
+    at(monkeypatch, 600)
+    sn.run_once()
+    [e] = sensor_events(box)
+    assert e["event"] == "app_modified" and e["severity"] == "warning"
+    assert len(incidents.build(days=7, directory=box / "lg" / "incidents", now=time.time() + 60)) == 1

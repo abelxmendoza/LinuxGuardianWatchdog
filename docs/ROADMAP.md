@@ -62,6 +62,11 @@ macOS original's feature set:
 - [x] Tripwires on what attackers touch (authorized_keys, sudo/PAM/polkit/sshd, hosts, kernel modules, apt sources and hooks, pip/npm/cargo/git) and opt-in decoy SSH key / AWS credentials / .env
 - [x] Attack coverage map (MITRE ATT&CK, checked against the code) and a "malware you might meet on Linux" explainer
 - [x] Gaps closed from the map: setuid/setgid watch, firewall / virus updater / AppArmor switched-off alerts, monitoring dead-man's switch from the daily scan
+- [x] Reliability pass after the architecture review: incident / finding / information classification and notification policy, persistent
+      risk acceptance, quiet development checkouts, narrower integrity scope, honeypot grace during our own scans, own-timer baseline
+      updates, safe process-kill and cache-clean inputs with tests, test fixtures that clean up
+- [ ] Next from the review (not built yet): fold the overlapping start-up watchers (`integrity`, `autoruns`, `tripwires`) and health views
+      (`diagnostics`, `scanner_health`, `self_check`) into one each; event retention; decide whether the AI stack earns its maintenance
 - [ ] Remaining gaps the map names: log-wipe detection, ransomware burst tripwire + backup check, sustained CPU/GPU alert, loaded kernel modules check
 - [ ] AI: optional daily triage digest (ranks open incidents), project-aware context (which ROS nodes you run)
 - [ ] Threat intel: domain/DNS lists, and checking listening-port peers (not only established outbound connections)

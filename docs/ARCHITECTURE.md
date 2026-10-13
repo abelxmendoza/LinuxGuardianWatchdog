@@ -195,6 +195,45 @@ in the code, and that every technique the sensors emit appears on the map. `malw
 the kinds of malware you might meet, not a signature list (ClamAV already has the real ones), and its claims are checked the
 same way.
 
+### Alert policy: incidents, findings and information
+
+An unencrypted disk and a trusted program suddenly changing are different things and are no longer announced the same way.
+`events.kind_of(category, severity, event)` is the one place that decides, from facts already in an event:
+- **incident**: something that may have *happened* (sensors, tripwires, malware, honeypot, a change where programs start from, a burst
+  of document changes). Warning and critical incidents raise one grouped desktop notification.
+- **finding**: a standing weakness (security audit, exposure, rootkit-check warnings). It lives in the Timeline and the dashboard;
+  only a *critical* one is announced, once.
+- **information**: routine activity. Never a popup, never an incident by itself.
+
+The Timeline shows the kind on every entry and summarises "N possible incidents, M standing findings".
+
+**Risk acceptance.** A finding you have decided to live with (full-disk encryption, say) can be accepted from the Timeline
+(`audit_events.py --accept`). It stays visible there, but it is no longer announced and no longer counts against the security rating, and
+a count changing ("7 updates" to "12") is still the same finding. Accepting hides nothing else: a different finding or a sensor's
+incident is unaffected, the decision is on record as an information event, and "Stop accepting" brings it back.
+
+**Development checkouts.** LinuxGuardian is edited in its own git checkout, where an uncommitted new file looks exactly like a file an
+attacker dropped. In a git checkout, uncommitted changes are a *warning in the health window* and a *quiet note in the Timeline*, never
+an alarm or a popup, and repeated notes never become an incident. Tampering signs stay critical anywhere: a file anyone can write to or
+another user owns, and (with no git history to explain it) a brand-new program file. Honest limit: in a checkout the sensor can't tell
+your edit from a same-user attacker's; the health window and `git status` still show every changed file.
+
+**Integrity scope.** Software projects (any git working tree) are skipped, because git already records exactly what changed, but
+`.git/hooks` and `.git/config` stay watched: hooks run on commit and the config can name a program to run. Changes where programs start
+from are warnings; edits to your own documents are information unless ten or more change in one check, which is a warning (the shape of
+ransomware). A honeypot access that falls inside one of our own scans (the ClamAV daemon can't be told to skip it) is not an
+intruder. The installer tells the baseline about LinuxGuardian's own timers (`integrity.py --accept/--forget`), so turning live
+monitoring on or off isn't reported as something appearing in or vanishing from a start-up location.
+
+**Destructive scripts.** `linux_process_manager.sh` refuses anything that isn't one ordinary process id above 1 (a leading `-1` or `0`
+means "every process" or "this group" to `kill`), refuses its own shell and parent, and refuses `--kill-name` for empty, tiny or
+wildcard-only names (`pgrep -f ""` matches nearly every process), for names matching more than 25 of your processes, and for critical
+desktop processes. `linux_cache_cleanup.sh` is a dry run unless `--apply`, never follows symlinks, and keeps the cache folders. Their
+tests replace `kill` with a function that only logs, so a regression cannot signal anything real.
+
+**Test hygiene.** Tests that need setuid files strip the bit when they finish, and a session hook strips any that slipped through:
+the live setuid sensor walks `/tmp`, and leftovers there would be reported as critical findings.
+
 ### Defenses switched off, setuid programs, and the dead-man's switch
 
 `defenses.py` reports a protection that WAS on and then went off: ufw switched off or its default for incoming connections set

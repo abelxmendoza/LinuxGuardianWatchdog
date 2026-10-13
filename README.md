@@ -130,6 +130,7 @@ cd LinuxGuardianSuite
 ./self_check.py --check                    # is LinuxGuardian itself intact, private and still watching?
 ./quarantine.py --findings                 # what the last scan flagged (--quarantine PATH, --restore ID, --delete ID)
 ./tripwires.py --check                     # did an SSH key, sudo rule, login rule or package registry just change?
+./audit_events.py --accept "No LUKS-encrypted volume detected"   # a risk you chose to live with: stays visible, stops nagging (--unaccept, --accepted)
 ./defenses.py --check                      # is the firewall (and the other protections) on, and was anything switched off?
 ./setuid_watch.py --check                  # new or changed setuid programs (also run every six hours by the live monitor)
 ./self_check.py --heartbeat                # dead-man's switch: warn if live monitoring was switched off (the daily scan runs this)

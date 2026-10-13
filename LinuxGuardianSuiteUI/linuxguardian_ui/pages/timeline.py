@@ -15,11 +15,14 @@ from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
 from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.components import page_header, section_header  # noqa: E402
+from linuxguardian_ui.dialogs import confirm  # noqa: E402
 
+import audit_events as ae  # noqa: E402
 import notify_events as ne  # noqa: E402
 import timeline as tl  # noqa: E402
 
 SEV_LABEL = {"critical": "Critical", "warning": "Warning", "info": "Routine"}
+KIND_LABEL = {"incident": "Possible incident", "finding": "Finding", "information": "Routine"}
 SEV_CSS = {"critical": "omega-critical", "warning": "omega-warning", "info": "omega-dim"}
 CATEGORY_LABEL = {
     "audit": "Security audit", "network": "Network exposure", "malware": "Malware scan",
@@ -79,7 +82,7 @@ class TimelinePage(Gtk.Box):
         self.notify_switch = Gtk.Switch(active=ne.is_enabled(), valign=Gtk.Align.CENTER)
         self.notify_switch.connect("notify::active", self._on_notify_toggled)
         notify_row.append(self.notify_switch)
-        notify_row.append(Gtk.Label(label="Desktop notifications for new warnings and critical findings", xalign=0, hexpand=True))
+        notify_row.append(Gtk.Label(label="Desktop notifications for possible incidents (and critical findings), never routine activity", xalign=0, hexpand=True))
         test = Gtk.Button(label="Send test")
         test.connect("clicked", self._on_test_notification)
         notify_row.append(test)
@@ -121,12 +124,17 @@ class TimelinePage(Gtk.Box):
 
     def _render_summary(self, active: list[tl.Entry]) -> None:
         counts = tl.summarize(active)
+        open_ = [e for e in active if e.status != "resolved" and e.severity != "info"]
+        incidents = sum(1 for e in open_ if e.kind == "incident")
+        findings = len(open_) - incidents
         if counts["critical"]:
-            text = f"{counts['critical']} critical and {counts['warning']} warning findings need a look."
+            text = f"{counts['critical']} critical and {counts['warning']} warning item(s) need a look"
         elif counts["warning"]:
-            text = f"{counts['warning']} warning finding{'s' if counts['warning'] != 1 else ''} to review. Nothing critical."
+            text = f"{counts['warning']} warning item{'s' if counts['warning'] != 1 else ''} to review. Nothing critical"
         else:
             text = "Nothing needs attention right now."
+        if open_:
+            text += f" ({incidents} possible incident{'s' if incidents != 1 else ''}, {findings} standing finding{'s' if findings != 1 else ''})."
         self.summary.set_label(text)
         for css in ("omega-critical", "omega-warning", "omega-heading"):
             self.summary.remove_css_class(css)
@@ -168,19 +176,48 @@ class TimelinePage(Gtk.Box):
         message = Gtk.Label(label=entry.message, xalign=0, wrap=True, selectable=True, max_width_chars=80)
         message.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         text.append(message)
-        bits = [CATEGORY_LABEL.get(entry.category, entry.category.title()), f"last seen {tl.fmt_when(entry.last_ts)}"]
+        bits = [KIND_LABEL.get(entry.kind, entry.kind.title()), CATEGORY_LABEL.get(entry.category, entry.category.title()),
+                f"last seen {tl.fmt_when(entry.last_ts)}"]
         if entry.count > 1:
             bits.append(f"seen {entry.count} times since {tl.fmt_when(entry.first_ts)}")
         detail = Gtk.Label(label=" · ".join(bits), xalign=0, wrap=True)
         detail.add_css_class("omega-dim")
         text.append(detail)
 
-        if entry.status != "resolved":
+        accepted = entry.category == "audit" and ae.is_accepted(entry.message)
+        if accepted:
+            chip.set_label("Accepted")
+            btn = Gtk.Button(label="Stop accepting", valign=Gtk.Align.CENTER)
+            btn.set_tooltip_text("You'll be told about this finding again if it is still true.")
+            btn.connect("clicked", self._on_unaccept, entry)
+            card.append(btn)
+        elif entry.category == "audit" and entry.status != "resolved" and entry.severity != "info":
+            btn = Gtk.Button(label="Accept this risk", valign=Gtk.Align.CENTER)
+            btn.set_tooltip_text("For something you've decided to live with. It stays visible here but stops being announced or counted against the rating.")
+            btn.connect("clicked", self._on_accept, entry)
+            card.append(btn)
+        if entry.status != "resolved" and not accepted:
             btn = Gtk.Button(label="Unmark seen" if entry.acknowledged else "Mark as seen", valign=Gtk.Align.CENTER)
             btn.set_tooltip_text("Hides this until the same finding is seen again. Nothing is deleted.")
             btn.connect("clicked", self._on_toggle_seen, entry)
             card.append(btn)
         return card
+
+    def _on_accept(self, _btn: Gtk.Button, entry: tl.Entry) -> None:
+        confirm(self.get_root(), "Accept this risk?",
+                f"{entry.message}\n\nIt stays visible in the Timeline, but you won't be notified about it again and it stops counting against the security "
+                "rating. A different problem, or a possible attack, is never hidden by this. You can undo it at any time.", "Accept this risk",
+                lambda: self._do_accept(entry), destructive=False)
+
+    def _do_accept(self, entry: tl.Entry) -> None:
+        ae.accept(entry.message)
+        tl.acknowledge(entry.key)
+        self.refresh(rebuild_categories=False)
+
+    def _on_unaccept(self, _btn: Gtk.Button, entry: tl.Entry) -> None:
+        ae.unaccept(entry.message)
+        tl.unacknowledge(entry.key)
+        self.refresh(rebuild_categories=False)
 
     def _on_toggle_seen(self, _btn: Gtk.Button, entry: tl.Entry) -> None:
         if entry.acknowledged:

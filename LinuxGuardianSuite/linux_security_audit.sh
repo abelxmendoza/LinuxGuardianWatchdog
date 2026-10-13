@@ -27,6 +27,13 @@ trap 'rm -f "$FINDINGS"' EXIT
 
 check() {
   local label="$1" status="$2" detail="${3:-}"
+  # A finding you chose to live with (audit_events.py --accept) stays visible but isn't counted against the rating or announced.
+  if [ "$status" != "pass" ] && python3 "$SCRIPT_DIR/audit_events.py" --is-accepted "$label${detail:+ — $detail}" >/dev/null 2>&1; then
+    lg_info "Accepted risk (not counted): $label"
+    PASS=$((PASS+1))
+    printf '%s\t%s\n' "$([ "$status" = fail ] && echo critical || echo warning)" "$label${detail:+ — $detail}" >> "$FINDINGS"
+    return
+  fi
   case "$status" in
     pass) lg_ok "$label"; PASS=$((PASS+1)) ;;
     warn) lg_warn "$label${detail:+ — $detail}"; WARN=$((WARN+1))

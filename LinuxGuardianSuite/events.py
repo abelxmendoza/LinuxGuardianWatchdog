@@ -33,6 +33,32 @@ SEVERITIES = ("info", "warning", "critical")
 STATUSES = ("detected", "changed", "resolved")
 
 
+# ---- what KIND of thing an event is ------------------------------------------------------------------------
+# An unencrypted disk is a configuration finding; a trusted program suddenly changing is a possible incident. They should
+# not be announced the same way. Three kinds, decided in one place from facts already in the event:
+#   incident     something that may have HAPPENED to this machine (a sensor, malware, a tripwire, a decoy touched)
+#   finding      a standing weakness or condition worth attention (security audit, exposure, rootkit-check warnings)
+#   information  routine activity worth keeping a record of
+INCIDENT, FINDING, INFORMATION = "incident", "finding", "information"
+_INCIDENT_CATEGORIES = {"sensor", "malware", "honeypot", "selfcheck"}
+_FINDING_CATEGORIES = {"audit", "network", "rootkit", "updates", "hardening"}
+_ROUTINE_INTEGRITY = {"file_modified", "file_missing", "file_new"}      # edits to your own documents
+
+
+def kind_of(category: str, severity: str, event: str | None = None) -> str:
+    """incident | finding | information. Informational severity is always information."""
+    if severity == "info":
+        return INFORMATION
+    if category in _INCIDENT_CATEGORIES:
+        return INCIDENT
+    if category == "integrity":
+        # a change where programs start from is an incident; edits to ordinary files only become one in a burst (see integrity.py)
+        return FINDING if event in _ROUTINE_INTEGRITY else INCIDENT
+    if category in _FINDING_CATEGORIES:
+        return FINDING
+    return INFORMATION if category in {"maintenance", "process"} else FINDING
+
+
 def lg_home() -> Path:
     return Path(os.environ.get("LG_HOME", str(Path.home() / ".linuxguardian")))
 

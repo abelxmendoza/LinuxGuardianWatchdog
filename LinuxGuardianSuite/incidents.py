@@ -263,6 +263,8 @@ def build(days: float = 7, directory: Path | None = None, now: float | None = No
         sensors = [o for o in group if o.category == "sensor"]
         if RANK[sev] == 0 and len(sensors) < 2:
             continue                                   # a lone routine note is a Timeline entry, not an incident
+        if RANK[sev] == 0 and all(o.event == "app_modified" for o in group):
+            continue                                   # editing LinuxGuardian in its git checkout is development, however many times it is noted
         title, why, benign, steps = _story(group)
         if RANK[MIN_SEVERITY.get(title, "info")] > RANK[sev]:
             sev = MIN_SEVERITY[title]
