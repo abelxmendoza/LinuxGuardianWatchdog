@@ -60,8 +60,15 @@ jobs:
       - name: pytest with coverage (unit, integration, end-to-end, regression, security-input and failure tests)
         working-directory: LinuxGuardianSuiteUI
         run: |
-          xvfb-run -a ../.venv/bin/python -m pytest tests -p no:cacheprovider \
-            --cov=../LinuxGuardianSuite --cov=linuxguardian_ui --cov-report=term --cov-report=xml:../coverage.xml
+          # -v and faulthandler show WHICH test is slow or stuck; the hard `timeout` stops a hang before the job limit.
+          set -o pipefail
+          timeout 1200 xvfb-run -a ../.venv/bin/python -X faulthandler -m pytest tests -v -p no:cacheprovider \
+            -o faulthandler_timeout=120 --durations=15 \
+            --cov=../LinuxGuardianSuite --cov=linuxguardian_ui --cov-report=term --cov-report=xml:../coverage.xml 2>&1 | tee ../pytest.log
+      - name: Where did pytest stop? (annotation, so the answer is visible without downloading logs)
+        if: failure() || cancelled()
+        run: |
+          tail -n 60 pytest.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}' | sed 's/^/::error title=pytest log (last 60 lines)::/'; echo
       - name: shell test suites
         run: |
           set -e

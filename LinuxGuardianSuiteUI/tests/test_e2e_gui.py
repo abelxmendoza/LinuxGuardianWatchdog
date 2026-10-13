@@ -23,11 +23,11 @@ gi = pytest.importorskip("gi")
 try:
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, GLib, Gtk
+    from gi.repository import Adw, Gdk, GLib, Gtk
 except (ValueError, ImportError) as exc:                       # pragma: no cover - environment without GTK4/libadwaita
     pytest.skip(f"GTK4/libadwaita not available: {exc}", allow_module_level=True)
 
-if not Gtk.init_check():                                      # no display
+if not Gtk.init_check() or Gdk.Display.get_default() is None:        # no display
     pytest.skip("no display (run with xvfb-run -a)", allow_module_level=True)
 
 import audit_events  # noqa: E402
