@@ -56,6 +56,11 @@ macOS original's feature set:
 - [x] Free local AI setup (hardware fit, Ollama steps, model download) and a local-model quality check (17 made-up incidents,
       graded Good / Use with caution / Not reliable)
 - [x] Known-bad address matching (FireHOL level 1 + abuse.ch Feodo Tracker, free, no account, matched locally) feeding the network sensor
+- [x] Terminal fallback: every feature as a command with and without the app, opened from a title-bar button filtered to the current tab
+- [x] Self-check and tamper detection (file hashes judged against git, permissions, damaged state with daily snapshots, `self` sensor), crash log and per-tab crash safety
+- [x] Malware cleaner: findings with plain explanations, re-verify, reversible quarantine, restore, confirmed permanent delete
+- [ ] More tripwires on what attackers touch (authorized_keys, sudoers.d, shell start-up, decoy SSH key and .env) with critical alerts
+- [ ] Attack coverage map: which common techniques (MITRE ATT&CK) the sensors cover, partly cover or miss, and a "malware you might meet on Linux" explainer
 - [ ] AI: optional daily triage digest (ranks open incidents), project-aware context (which ROS nodes you run)
 - [ ] Threat intel: domain/DNS lists, and checking listening-port peers (not only established outbound connections)
 - [ ] Hardening: backup check (is there a recent snapshot?), outbound connection visibility, DNS-over-TLS toggle

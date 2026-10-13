@@ -105,6 +105,14 @@ def cluster(obs: list[Obs]) -> list[list[Obs]]:
 
 # (events that must ALL be present) -> title, why it matters, why it is often harmless, what to check
 STORIES: list[tuple[frozenset, str, str, str, list[str]]] = [
+    (frozenset({"app_tampered"}), "LinuxGuardian's own files were tampered with",
+     "A new program file appeared in the app, or a file anyone can write to changed. Code in the app runs as you every few minutes, so changing it "
+     "is a way to hide or to stay.", "A half-finished update or a copy of the app made by someone else on this laptop can look the same.",
+     ["self_check.py --check shows exactly which files", "If this is a git checkout: git status and git diff in the app folder", "Compare with a fresh download before you trust it"]),
+    (frozenset({"app_modified"}), "LinuxGuardian's own files changed",
+     "The app's program files no longer match the baseline recorded when they were last trusted, and it isn't a clean update.",
+     "This is normal if you (or an update) edited the app. It only matters if you didn't.",
+     ["self_check.py --check lists the files", "git diff in the app folder, if it is a checkout", "If you made the change: accept it in the app's health check"]),
     (frozenset({"threat_intel_hit"}), "A program is connected to an address on a public blocklist",
      "The remote address is listed by security researchers as an attack source or a botnet control server. A program on this laptop that talks to one "
      "may be infected, or may be fetching something it shouldn't.",

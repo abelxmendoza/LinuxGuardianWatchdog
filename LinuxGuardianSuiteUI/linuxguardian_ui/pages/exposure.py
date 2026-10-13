@@ -15,10 +15,14 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from linuxguardian_ui import scan_history  # noqa: E402,F401  (puts the suite dir on sys.path)
 from linuxguardian_ui.clipboard import copy_text  # noqa: E402
 from linuxguardian_ui.components import section_header  # noqa: E402
 from linuxguardian_ui.dialogs import confirm  # noqa: E402
+from linuxguardian_ui.exposure_stack import exposure_stack  # noqa: E402
 from linuxguardian_ui.scripts import run_streaming_async, run_sync_async  # noqa: E402
+
+import events  # noqa: E402
 
 SEV_LABEL = {"critical": "Critical", "warning": "Warning", "info": "Routine"}
 SEV_CSS = {"critical": "omega-critical", "warning": "omega-warning", "info": "omega-dim"}
@@ -181,40 +185,86 @@ class ExposurePage(Gtk.Box):
 
     def _render_sections(self) -> None:
         self._clear(self.sections_box)
-        heading = Gtk.Label(label="Reachable from the network", xalign=0)
+        if not self._meta:
+            return
+        heading = Gtk.Label(label="Where this laptop is exposed", xalign=0)
         heading.add_css_class("omega-heading")
         heading.add_css_class("title-4")
         self.sections_box.append(heading)
-        if not self._meta:
-            return
+        self.sections_box.append(_label(
+            "Outside in. The small word on the left is the step to remember. "
+            "A quiet step means nothing there needs attention. Ports are the middle step: "
+            "each one is a protocol and number, who can reach it, and which program owns it.",
+            "omega-dim",
+        ))
+        by_id = {service["id"]: service for service in self._services}
+        for rung in exposure_stack(self._meta, self._services, self._stay_events()):
+            self.sections_box.append(self._build_rung(rung, by_id))
 
-        exposed = [s for s in self._services if s["scope"] != "loopback"]
-        attention = [s for s in exposed if s["severity"] != "info"]
-        routine = [s for s in exposed if s["severity"] == "info"]
-        local_only = [s for s in self._services if s["scope"] == "loopback"]
+    def _stay_events(self) -> list[dict]:
+        try:
+            return events.read_events(limit=200)
+        except OSError:
+            return []
 
-        if attention:
-            for service in attention:
-                self.sections_box.append(self._build_service(service, expanded=True))
-        else:
-            self.sections_box.append(_label("Nothing reachable from the network needs your attention.", "omega-heading"))
+    def _build_rung(self, rung: dict, by_id: dict) -> Gtk.Widget:
+        card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        card.add_css_class("omega-card")
+        card.add_css_class("exposure-rung")
+        card.add_css_class("rung-quiet" if rung["quiet"] else f"rung-{rung['severity']}")
 
+        word = Gtk.Label(label=rung["caption"], xalign=0, yalign=0)
+        word.add_css_class("omega-dim")
+        word.add_css_class("exposure-caption")
+        word.set_size_request(72, -1)
+        card.append(word)
+
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, hexpand=True)
+        card.append(body)
+        title = Gtk.Label(label=rung["title"], xalign=0)
+        title.add_css_class("omega-heading")
+        body.append(title)
+        body.append(_label(rung["summary"], "omega-dim"))
+        if rung["key"] == "port":
+            self._fill_ports(body, rung, by_id)
+            return card
+        for item in rung["items"]:
+            row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            line.append(Gtk.Label(label=item["label"], xalign=0, hexpand=True, wrap=True))
+            if item["severity"] != "info":
+                badge = Gtk.Label(label=SEV_LABEL[item["severity"]])
+                badge.add_css_class(SEV_CSS[item["severity"]])
+                line.append(badge)
+            row.append(line)
+            if item.get("detail"):
+                row.append(_label(item["detail"], "omega-dim"))
+            body.append(row)
+        return card
+
+    def _fill_ports(self, body: Gtk.Box, rung: dict, by_id: dict) -> None:
+        attention: list[dict] = []
+        routine: list[dict] = []
+        for item in rung["items"]:
+            service = by_id.get(item.get("id"))
+            if service is None:
+                continue
+            (attention if service["severity"] != "info" else routine).append(service)
+        for service in attention:
+            body.append(self._build_service(service, expanded=True))
         if routine:
-            self.sections_box.append(
-                self._build_list(
-                    f"Routine listeners  —  {len(routine)}",
-                    "Discovery, VPN and similar traffic. Shown so nothing is hidden, but not a concern on its own.",
-                    routine,
-                )
-            )
+            body.append(self._build_list(
+                f"Routine ports  —  {len(routine)}",
+                "Discovery, VPN and similar. Shown so nothing is hidden, and not a concern on its own.",
+                routine,
+            ))
+        local_only = [service for service in self._services if service["scope"] == "loopback"]
         if local_only:
-            self.sections_box.append(
-                self._build_list(
-                    f"Only reachable from this laptop  —  {len(local_only)}",
-                    "These listen on the loopback address, so other machines can't connect to them.",
-                    local_only,
-                )
-            )
+            body.append(self._build_list(
+                f"Only this laptop  —  {len(local_only)}",
+                "These listen on the loopback address, so other machines can't connect to them.",
+                local_only,
+            ))
 
     def _build_service(self, service: dict, expanded: bool) -> Gtk.Widget:
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -288,7 +338,11 @@ class ExposurePage(Gtk.Box):
             f"Firewall: {fw.get('kind')} {fw.get('state')} (coverage: {fw.get('coverage')}). {fw.get('note', '')}",
             "Networks: " + (", ".join(f"{n['iface']} {n['addr']} ({n['kind']})" for n in meta.get("networks", [])) or "none"),
             "",
+            "Where this laptop is exposed, outside in:",
         ]
+        for rung in exposure_stack(meta, self._services, self._stay_events()):
+            lines.append(f"- {rung['caption']}: {rung['title']} — {rung['summary']}")
+        lines.append("")
         for service in self._services:
             scope = "loopback only" if service["scope"] == "loopback" else "reachable from the network"
             lines.append(

@@ -267,6 +267,15 @@ def interfaces_from_ip_json(text: str) -> list[dict]:
     return found
 
 
+def parse_route_dev(text: str) -> str:
+    """Device from `ip route get <address>`. Empty when this machine has no route there.
+
+    The lookup is local: it asks the kernel which interface it would use, and sends no packet.
+    """
+    match = re.search(r"\bdev\s+(\S+)", text)
+    return match.group(1) if match else ""
+
+
 def reachable_networks(scope: str, bind_host: str, interfaces: list[dict]) -> list[dict]:
     """Which networks can see a listener bound this way."""
     usable = [i for i in interfaces if i["kind"] not in ("loopback", "link_local")]
@@ -504,6 +513,7 @@ def collect() -> tuple[dict, list[dict]]:
     listeners_txt = _run(["ss", "-H", "-tulnp"], 20) if ss_ok else None
     est_txt = _run(["ss", "-H", "-tn", "state", "established"], 20) if ss_ok else None
     ip_txt = _run(["ip", "-j", "addr"], 10) if shutil.which("ip") else None
+    route_txt = _run(["ip", "route", "get", "1.1.1.1"], 5) if shutil.which("ip") else None
 
     interfaces = interfaces_from_ip_json(ip_txt or "[]")
     fw = firewall_status()
@@ -517,6 +527,7 @@ def collect() -> tuple[dict, list[dict]]:
         "ss_ok": ss_ok and listeners_txt is not None,
         "root": hasattr(os, "geteuid") and os.geteuid() == 0,
         "firewall": fw,
+        "internet_dev": parse_route_dev(route_txt or ""),
         "networks": [i for i in interfaces if i["kind"] not in ("loopback", "link_local")],
         "counts": {**counts, "loopback": sum(1 for s in services if s["scope"] == "loopback")},
         "listeners": len(services),

@@ -12,6 +12,7 @@ Incidents and notifications already understand. No AI here: every rule is plain,
   accounts   new users, uid 0 accounts, new members of the admin group           (/etc/passwd, /etc/group)
   usb        new USB devices, especially keyboard-like ones that also pretend to be storage
   commands   new programs dropped into ~/.local/bin and friends, or executables dropped in /tmp
+  self       LinuxGuardian's own program files changing (hash baseline, judged against git)       (self_check.py)
 
 A sensor only records what is NEW since it last ran; the first run just learns what is normal on this laptop, and
 network behaviour is learned for three days before it alerts. Nothing here kills, blocks or changes anything.
@@ -42,6 +43,7 @@ SUITE_DIR = Path(__file__).resolve().parent
 if str(SUITE_DIR) not in sys.path:
     sys.path.insert(0, str(SUITE_DIR))
 
+import self_check  # noqa: E402
 import threat_intel  # noqa: E402
 from events import lg_home, record_event  # noqa: E402
 
@@ -602,8 +604,19 @@ class SensorUnavailable(Exception):
     pass
 
 
+def sensor_self(ctx: Ctx) -> list[Finding]:
+    """The app watching itself: a changed or unexpected program file is reported like any other persistence attempt."""
+    out = []
+    for c in self_check.sensor_findings():
+        key = "self:app:" + hashlib.sha1("|".join(c["paths"]).encode()).hexdigest()[:12]
+        root = self_check.app_root()
+        out.append(Finding(key, c["level"], "app_tampered" if c["level"] == "critical" else "app_modified", c["text"],
+                           [str(root / p) for p in c["paths"][:6]], "T1554", "persistence", {"files": c["paths"][:20]}))
+    return out
+
+
 SENSORS = {"auth": sensor_auth, "processes": sensor_processes, "network": sensor_network, "autoruns": sensor_autoruns,
-           "accounts": sensor_accounts, "usb": sensor_usb, "commands": sensor_commands}
+           "accounts": sensor_accounts, "usb": sensor_usb, "commands": sensor_commands, "self": sensor_self}
 DESCRIPTIONS = {
     "auth": "Login history: failed logins, new accounts, sensitive sudo use",
     "processes": "Running programs: from /tmp, deleted, or pretending to be the kernel",
@@ -612,6 +625,7 @@ DESCRIPTIONS = {
     "accounts": "User accounts and who has administrator rights",
     "usb": "New USB devices (keyboard-like devices that also act as storage)",
     "commands": "New command-line programs and executables dropped in /tmp",
+    "self": "LinuxGuardian's own files: changed, added or opened up to other users",
 }
 
 
@@ -648,6 +662,12 @@ def run_once() -> dict:
         report["sensors"][name] = info
     for k in [k for k, v in seen.items() if t - v > PRUNE_AFTER]:
         del seen[k]
+    if t - state.get("last_maintain", 0) > 86400:
+        try:
+            self_check.maintain()                          # snapshot state files, rotate the log, prune old snapshots
+        except Exception:  # noqa: BLE001 - upkeep must never silence the sensors
+            pass
+        state["last_maintain"] = t
     state["last_run"] = t
     state["last_report"] = {k: v for k, v in report.items() if k != "sensors"} | {"sensors": {n: {"ok": i["ok"], "error": i["error"]} for n, i in report["sensors"].items()}}
     save_state(state)

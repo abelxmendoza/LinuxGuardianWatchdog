@@ -10,6 +10,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
+from linuxguardian_ui import crashlog  # noqa: E402
 from linuxguardian_ui.window import LinuxGuardianWindow  # noqa: E402
 
 APP_ID = "org.linuxguardian.Watchdog"
@@ -41,6 +42,7 @@ def _register_icon() -> None:
 
 
 def main() -> int:
+    crashlog.install()                   # uncaught errors are logged privately, then reported as usual
     GLib.set_prgname(ICON_NAME)          # the dock matches windows to linuxguardian-watchdog.desktop by this name
     app = Adw.Application(application_id=APP_ID)
 

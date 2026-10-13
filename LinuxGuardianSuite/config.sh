@@ -13,9 +13,9 @@ LG_CONFIG_FILE="$LG_HOME/config"
 
 # Quick scans skip caches, VCS metadata, and bulky SDKs/toolchains. Override
 # in ~/.linuxguardian/config. Full scans only skip /sys /proc /dev.
-LG_CLAM_EXCLUDE_DIRS_QUICK='^/sys|^/proc|^/dev|/\.cache($|/)|/\.local/share/Trash|/snap/|/node_modules/|/\.git($|/)|/\.npm($|/)|/\.rustup($|/)|/\.cargo($|/)|/nvidia/nvidia_sdk|/PX4-Autopilot|/STM32Cube($|/)|/st/stm32cubeide|/\.gz($|/)|/Passwords_DO_NOT_OPEN($|/)'
+LG_CLAM_EXCLUDE_DIRS_QUICK='^/sys|^/proc|^/dev|/\.cache($|/)|/\.local/share/Trash|/snap/|/node_modules/|/\.git($|/)|/\.npm($|/)|/\.rustup($|/)|/\.cargo($|/)|/nvidia/nvidia_sdk|/PX4-Autopilot|/STM32Cube($|/)|/st/stm32cubeide|/\.gz($|/)|/Passwords_DO_NOT_OPEN($|/)|/\.linuxguardian/quarantine($|/)'
 # The honeypot is a decoy whose only job is to be left alone; our own scans must not read it.
-LG_CLAM_EXCLUDE_DIRS_FULL='^/sys|^/proc|^/dev|/Passwords_DO_NOT_OPEN($|/)'
+LG_CLAM_EXCLUDE_DIRS_FULL='^/sys|^/proc|^/dev|/Passwords_DO_NOT_OPEN($|/)|/\.linuxguardian/quarantine($|/)'
 
 LG_MONITORED_DIRS_DEFAULT="$HOME/Documents"
 LG_HONEYPOT_DIR="$HOME/Documents/Passwords_DO_NOT_OPEN"
@@ -24,6 +24,9 @@ LG_LOG_FILE="$LG_LOG_DIR/linuxguardian.log"
 
 mkdir -p "$LG_BASELINE_DIR" "$LG_CHECKPOINT_DIR" "$LG_QUARANTINE_DIR" \
          "$LG_LOG_DIR" "$LG_INCIDENT_DIR" "$LG_SCAN_DIR" "$LG_SCAN_DIR/history"
+
+# Everything under here (evidence, logs, settings, quarantine) is private to you; a 700 top folder keeps other accounts out of all of it.
+chmod 700 "$LG_HOME" 2>/dev/null || true
 
 # Allow the user to override any of the above in ~/.linuxguardian/config
 # shellcheck source=/dev/null

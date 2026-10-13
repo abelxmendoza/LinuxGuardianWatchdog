@@ -114,6 +114,12 @@ def test_interfaces_tolerate_garbage() -> None:
     assert exp.interfaces_from_ip_json('[{"ifname":"x","addr_info":[{"local":"bogus","prefixlen":8}]}]') == []
 
 
+def test_route_dev_is_the_interface_the_kernel_would_use() -> None:
+    assert exp.parse_route_dev("1.1.1.1 via 10.200.0.1 dev wlp1 src 10.200.4.228 uid 1000\n") == "wlp1"
+    assert exp.parse_route_dev("RTNETLINK answers: Network is unreachable\n") == ""
+    assert exp.parse_route_dev("") == ""
+
+
 def test_reachable_networks() -> None:
     ifs = exp.interfaces_from_ip_json(IP_JSON)
     wide = exp.reachable_networks("all", "0.0.0.0", ifs)

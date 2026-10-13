@@ -49,6 +49,8 @@ def box(tmp_path, monkeypatch):
     monkeypatch.setenv("LG_GROUP", str(t / "group"))
     monkeypatch.setenv("LG_USB", str(t / "usb"))
     monkeypatch.setenv("LG_SENSOR_NOW", str(T0))
+    (t / "approot").mkdir()
+    monkeypatch.setenv("LG_APP_ROOT", str(t / "approot"))             # the app-integrity sensor watches a throwaway tree, not this checkout
     return t
 
 
@@ -428,9 +430,9 @@ def test_cli_run_and_status(box):
     import subprocess
     env = dict(os.environ)
     out = subprocess.run([sys.executable, str(ROOT / "LinuxGuardianSuite" / "sensors.py"), "--run"], capture_output=True, text=True, env=env)
-    assert out.returncode == 0 and "7 of 7 working" in out.stdout
+    assert out.returncode == 0 and "8 of 8 working" in out.stdout
     st = json.loads(subprocess.run([sys.executable, str(ROOT / "LinuxGuardianSuite" / "sensors.py"), "--status", "--json"], capture_output=True, text=True, env=env).stdout)
-    assert st["active"] and len(st["sensors"]) == 7
+    assert st["active"] and len(st["sensors"]) == 8
 
 
 def test_expected_programs_can_be_allowed_and_broad_paths_cannot(box, monkeypatch):

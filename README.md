@@ -63,6 +63,9 @@ LinuxGuardianWatchdog/
 │   ├── ai_eval.py               # Quality check: grades a local AI model on made-up attacks and tricks
 │   ├── local_ai.py              # Free local AI setup: hardware fit, Ollama steps, model download
 │   ├── threat_intel.py          # Known-bad address lists (free, no account) checked against connections
+│   ├── fallback.py              # Every feature as a copyable/openable terminal command (with and without the app)
+│   ├── self_check.py            # The app checking itself: file hashes vs git, permissions, damaged state, upkeep
+│   ├── quarantine.py            # Malware cleaner: re-verify, quarantine reversibly, restore, delete on request
 │   ├── incidents.py             # Groups sensor events into explained incidents
 │   ├── evidence.py              # Read-only evidence bundle for an incident
 │   ├── hardening.py             # Hardening checklist with previewed, undoable fixes
@@ -118,6 +121,9 @@ cd LinuxGuardianSuite
 ./local_ai.py --status                     # free local AI: what your laptop can run, and the next setup step
 ./ai_eval.py --run --model qwen2.5:7b      # grade a local model on 17 made-up incidents (Good / Use with caution / Not reliable)
 ./threat_intel.py --update                 # download the free known-bad address lists (and turn the check on)
+./self_check.py --check                    # is LinuxGuardian itself intact, private and still watching?
+./quarantine.py --findings                 # what the last scan flagged (--quarantine PATH, --restore ID, --delete ID)
+./fallback.py --list                       # every feature as a plain terminal command (--open ID opens it in a terminal)
 ./incidents.py                             # related events grouped into plain-language incidents
 ./evidence.py --incident ID                # read-only evidence bundle for an incident
 ./hardening.py --check                     # hardening checklist: what's weak, why, and the fix (no root)

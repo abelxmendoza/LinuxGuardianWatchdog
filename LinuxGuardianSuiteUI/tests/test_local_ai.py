@@ -41,12 +41,12 @@ class FakeOllama:
                 req = json.loads(self.rfile.read(n))
                 if self.path == "/api/pull":
                     outer.pulled.append(req["model"])
+                    if any(m.get("status") == "success" for m in outer.pull_script):
+                        outer.models.append(req["model"])               # registered before the reply, so the client never races it
                     self.send_response(200)
                     self.end_headers()
                     for msg in outer.pull_script:
                         self.wfile.write((json.dumps(msg) + "\n").encode())
-                    if any(m.get("status") == "success" for m in outer.pull_script):
-                        outer.models.append(req["model"])
 
             def log_message(self, *a):
                 pass

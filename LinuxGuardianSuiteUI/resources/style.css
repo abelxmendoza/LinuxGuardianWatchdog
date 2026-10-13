@@ -335,3 +335,11 @@ viewswitcher button label { font-size: 12px; }
 .activity-mark-fail { color: @omega_red; font-weight: 800; }
 .activity-mark-info { color: @omega_text_dim; }
 .activity-group-title { font-weight: 700; }
+
+/* Exposure: five steps, outside in. The left edge is the step's severity. */
+.exposure-rung { border-left: 4px solid alpha(@omega_text_dim, 0.45); }
+.exposure-rung.rung-critical { border-left-color: @omega_red; }
+.exposure-rung.rung-warning { border-left-color: @omega_yellow; }
+.exposure-rung.rung-info { border-left-color: @omega_purple; }
+.exposure-rung.rung-quiet { border-left-color: alpha(@omega_text_dim, 0.35); }
+.exposure-caption { font-family: monospace; font-size: 0.85em; }

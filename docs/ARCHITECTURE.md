@@ -199,6 +199,54 @@ follow. A grade belongs to one model and one version of the prompt and test set,
 changes. The test incidents contain nothing from your laptop and are sent only to a local model; a cloud model is refused
 unless explicitly allowed (it costs money). Investigations with an ungraded or weak local model show a banner saying so.
 
+## Resilience: terminal fallback, self-checks and crash safety
+
+**Terminal fallback** (`fallback.py`, the terminal icon in the title bar). Every feature is listed as a command you can copy
+or open in a terminal, in two forms: the app's own script, and a "without the app" version made of standard Linux tools
+(`clamscan`, `ss`, `ufw`, `apt`...) that keeps working even if LinuxGuardian itself is broken or tampered with. The button opens
+the list pre-filtered to the tab you are on. What opens is only ever text from a fixed list; the only values filled in are a
+process id or an incident id, validated against strict patterns and shell-quoted, and there is no function that accepts a command
+string from outside (a test asserts it). Commands that change things are flagged and confirmed first; the terminal pauses at the
+end so the output can be read.
+
+**Self-check** (`self_check.py`, the check-mark in the title bar, and the `self` sensor every 5 minutes):
+- *App files*: SHA-256 baseline of the program files, judged against git when the install is a checkout. A clean update is
+  information ("accept it"), edits that aren't a clean update are a warning, and a new program file that isn't part of the
+  published version, a world-writable file, or a file owned by another user is **critical** and becomes an incident
+  ("LinuxGuardian's own files were tampered with"). A damaged baseline is never quietly replaced by a new one: that is what
+  tampering would look like.
+- *Permissions*: only you can write to the app; the data folder (evidence, logs, settings, quarantine) is mode 700, which
+  `config.sh` now applies by itself. Real finding on this laptop: it was 775.
+- *Saved state*: each state file must parse; a damaged one is restored from the newest good daily snapshot, or moved aside
+  (kept as `.corrupt`) so a fresh one is made. Snapshots never overwrite a good copy with a damaged one.
+- *Allow-list review* (an intruder's way to hide is to add themselves), *live monitoring actually ran recently*, *disk space*.
+- Repairs are previewed (`--plan`), name-validated and applied only on your click. Daily upkeep snapshots state, rotates the log
+  and prunes old snapshots.
+
+Honest limit: someone who already controls your account can edit the app and its baseline too. This catches accidents,
+half-finished updates and unsophisticated tampering and raises an alert; it cannot promise more.
+
+**Crash safety.** A tab that fails to build shows what happened, logs it privately (`~/.linuxguardian/logs/app-errors.log`,
+mode 600, size-capped) and offers the terminal commands, instead of taking the whole app down; uncaught errors on any thread are
+logged the same way. The log writer can never raise a second error.
+
+## Malware cleaner (quarantine)
+
+ClamAV finds malware; `quarantine.py` (the Malware tab) deals with it cautiously, because antivirus has false alarms (a ROS
+build, a model file, a security tool). Nothing is deleted automatically.
+1. *Findings* come from the last scan's report, each with a plain explanation of the signature name (test file, heuristic, PUA,
+   miner, ransomware, Linux backdoor, or "malware for another system") and a flag when that kind is often a false alarm.
+2. *Re-verification*: a scan report is text and a file name can be made to look like a report line, so the file is scanned again
+   right before anything moves. A forged line pointing at an innocent file moves nothing.
+3. *Quarantine* copies to a private folder, checks the copy's hash, makes it non-executable and read-only, and only then removes
+   the original, and only if it is still the same file (inode check) so a swapped-in file is never deleted. Files owned by an
+   installed package are refused ("reinstall the package"), as are symlinks, files you don't own, and system paths.
+4. *Afterwards* it lists startup entries, user services, cron and shell files that mention the file (report only) and whether the
+   program was running.
+5. *Restore* puts it back non-executable (unless you ask), never over something that exists, and refuses a payload whose hash
+   changed. *Delete permanently* exists only for items already in quarantine and is separately confirmed. A static test pins the
+   number of removal calls so a future change that deletes files forces a review.
+
 ## Activity view
 
 Scripts print terminal text; the Dashboard shows it as plain-language CARDS instead. `activity.py` (pure Python, no GTK)
