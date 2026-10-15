@@ -17,6 +17,7 @@ Incidents and notifications already understand. No AI here: every rule is plain,
   decoys     fake SSH key / cloud credentials / .env that were opened, changed or deleted           (decoys.py)
   defenses   the firewall, the virus-definition updater or AppArmor being switched off              (defenses.py)
   setuid     a new setuid/setgid program, the classic way back to administrator rights              (setuid_watch.py)
+  logins     a login that took over 30 s, and the LinuxGuardian changes made before it            (login_watch.py)
 
 A sensor only records what is NEW since it last ran; the first run just learns what is normal on this laptop, and
 network behaviour is learned for three days before it alerts. Nothing here kills, blocks or changes anything.
@@ -651,6 +652,13 @@ def sensor_setuid(ctx: Ctx) -> list[Finding]:
     return _as_findings(setuid_watch.run(ctx.state, allow=list(ctx.allow.get("exe", []))))
 
 
+def sensor_logins(ctx: Ctx) -> list[Finding]:
+    """A login that sat at a black screen, with the LinuxGuardian system changes made before it (see login_watch.py)."""
+    import login_watch
+
+    return _as_findings(login_watch.run(ctx.state, report=not ctx.first_run))
+
+
 def sensor_decoys(ctx: Ctx) -> list[Finding]:
     """Planted fake secrets that were read, changed or deleted (see decoys.py). Quiet unless you planted decoys."""
     out = []
@@ -674,7 +682,8 @@ def sensor_self(ctx: Ctx) -> list[Finding]:
 
 SENSORS = {"auth": sensor_auth, "processes": sensor_processes, "network": sensor_network, "autoruns": sensor_autoruns,
            "accounts": sensor_accounts, "usb": sensor_usb, "commands": sensor_commands, "self": sensor_self,
-           "tripwires": sensor_tripwires, "decoys": sensor_decoys, "defenses": sensor_defenses, "setuid": sensor_setuid}
+           "tripwires": sensor_tripwires, "decoys": sensor_decoys, "defenses": sensor_defenses, "setuid": sensor_setuid,
+           "logins": sensor_logins}
 DESCRIPTIONS = {
     "auth": "Login history: failed logins, new accounts, sensitive sudo use",
     "processes": "Running programs: from /tmp, deleted, or pretending to be the kernel",
@@ -688,6 +697,7 @@ DESCRIPTIONS = {
     "decoys": "Fake secrets planted for intruders to find (only if you planted them)",
     "defenses": "Protections switched off: the firewall, the virus-definition updater, AppArmor",
     "setuid": "New programs that run with someone else's rights (checked every six hours)",
+    "logins": "Slow logins (a black screen before the desktop), and what LinuxGuardian changed before them",
 }
 
 

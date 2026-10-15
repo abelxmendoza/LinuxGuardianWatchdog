@@ -45,6 +45,11 @@ a green CI run on GitHub, hand-testing the privileged flows on a disposable Ubun
 - [x] Desktop notifications for new warning/critical findings (grouped, never replays history, on/off switch)
 - [x] ROS-aware firewall helper (Exposure tab): narrow ufw rules for ONE robot address, the ports of YOUR ROS domain,
       optional PX4/Foxglove/rosbridge presets; preview first, one password prompt, removable
+- [x] Never-break-the-computer pass (2026-10-15 black-screen incident): slow-login sensor and change ledger with undo
+      commands, loopback-IPv6 check/fix, ufw IPv6 fix refused while loopback IPv6 is off, no sudo from background runs,
+      alerts kept until the desktop can show them, daily scan delayed 15 min, "Broken pipe" log spam fixed
+- [x] Firewall tab: ufw status (incl. a service that failed to start, and why), numbered rules, recent blocks;
+      on/off, restart, defaults, logging, add (previewed) and delete (fingerprint-checked) rules, one password prompt each
 - [x] Hardening tab: previewed, undoable fixes (screen lock, Screen Sharing, lock-screen notifications, SSH/credential
       file permissions, kernel network settings, ufw IPv6 + logging, daily background protection)
 - [x] VPN status for Tailscale + Proton VPN together (route owner, DNS/IPv6 leaks, exit-node and kill-switch conflicts)

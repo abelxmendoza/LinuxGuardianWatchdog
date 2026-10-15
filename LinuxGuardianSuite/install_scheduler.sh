@@ -34,6 +34,9 @@ Type=oneshot
 # Gentle on the battery: low CPU and disk priority, and only files changed since the last scan.
 Nice=10
 IOSchedulingClass=idle
+# A scan missed while the laptop was off or asleep catches up on the next start; wait 15 minutes first so it never
+# competes with logging in or waking up.
+ExecStartPre=/bin/sleep 900
 ExecStart=$SCRIPT_DIR/linux_guardian.sh --scan --changed %h
 ExecStartPost=-$SCRIPT_DIR/linux_watchdog.sh --check
 ExecStartPost=-$SCRIPT_DIR/linux_exposure.sh --record

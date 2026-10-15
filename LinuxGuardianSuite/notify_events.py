@@ -92,9 +92,23 @@ def _notify_cmd() -> str | None:
     return shutil.which(os.environ.get("LG_NOTIFY_CMD", "notify-send"))
 
 
+def notifications_ready() -> bool:
+    """False only when the desktop's notification service is certainly not there yet (the timer can run before the desktop
+    has started at login). Unknown counts as ready: notify-send itself will then say whether it worked."""
+    if os.environ.get("LG_NOTIFY_CMD") or not shutil.which("gdbus"):
+        return True
+    try:
+        out = subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.DBus", "--object-path", "/org/freedesktop/DBus",
+                              "--method", "org.freedesktop.DBus.NameHasOwner", "org.freedesktop.Notifications"],
+                             capture_output=True, text=True, timeout=5, check=False).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    return "false" not in out
+
+
 def send_notification(title: str, body: str, *, critical: bool = False) -> bool:
     cmd = _notify_cmd()
-    if not cmd:
+    if not cmd or not notifications_ready():
         return False
     args = [cmd, "-a", APP_NAME, "-i", ICON, "-u", "critical" if critical else "normal", title, body]
     try:
@@ -147,10 +161,11 @@ def run_send(now: float | None = None) -> int:
         return 0
     title, body, critical = compose(fresh)
     sent = send_notification(title, body, critical=critical)
-    if sent:
-        announced = {**announced, **{e.key: e.last_ts for e in fresh}}
+    if not sent:
+        return 0                    # leave the watermark where it was: these are announced on the next run that can reach the desktop
+    announced = {**announced, **{e.key: e.last_ts for e in fresh}}
     _write_marker(now, announced)
-    return len(fresh) if sent else 0
+    return len(fresh)
 
 
 def main() -> int:

@@ -404,6 +404,48 @@ previewed rules in ONE privileged call, validates every group before touching an
 them), builds the rule comment from an allow-list, and never changes the default policy or enables/disables ufw.
 Allow-rules are root-only to read, so the app can't list what already exists; ufw skips duplicates.
 
+## Firewall tab (ufw control)
+
+`firewall_control.py` reads what a normal user may read: `/etc/ufw/ufw.conf` (on/off, logging), `/etc/default/ufw`
+(default policies), `systemctl is-active ufw`, and, when the service failed, the error line from its journal (for
+example `ip6tables-restore: line 4 failed`, which leaves the IPv4 rules loaded and IPv6 not). It also summarises
+`/var/log/ufw.log` (readable by the `adm` group) into blocked-connection counts by source and port. It turns an
+add-rule request into the exact ufw words or a plain refusal: port 1-65535 or a range (ranges need tcp/udp), a
+source address or network (or anyone, with a warning), a 40-character label from an allow-list.
+
+`linux_firewall.sh` is the only thing that acts. Every change goes through ONE fixed root script that re-validates
+each argument against an allow-list, and ends by printing `ufw status numbered` so the page shows what root actually
+did without a second prompt. Rules are root-only to read, so listing them is an explicit, read-only password prompt.
+Delete is by number, but the page also sends a SHA-256 of the rule line it showed; the root script recomputes it
+and deletes nothing if the list changed meanwhile (exit 4). Incoming "allow" is not offered as a default (turning the
+firewall off says that honestly); turning it off is recorded as a warning event. It refuses when firewalld or
+nftables is in charge. Tests: `tests/test_firewall_control.sh` (stand-in ufw/pkexec, including tampered root input)
+and `LinuxGuardianSuiteUI/tests/test_firewall_control.py`.
+
+## Never break the computer (lessons from 2026-10-15)
+
+On 2026-10-15 every login sat at a black screen for ~135 s. Cause: `/etc/sysctl.d/99-disable-ipv6.conf` (not
+LinuxGuardian, January 2026) set `net.ipv6.conf.lo.disable_ipv6 = 1`; the braille helper `xbrlapi`, started in the
+foreground by `/etc/X11/Xsession.d/90xbrlapi`, tries `[::1]:4101`, and that connection hung for its TCP timeout instead
+of being refused. The trigger date is unproven, but it followed LinuxGuardian's Hardening fix "firewall filters IPv6"
+(Oct 12, `IPV6=yes`): with IPv6 off on loopback, ufw's IPv6 rules fail to load (`ip6tables-restore: line 4 failed`),
+and a half-loaded IPv6 firewall can drop traffic to ::1. Rules that follow:
+
+1. **Never switch IPv6 off on loopback.** No root script does (a test greps for it). Hardening checks
+   `net.ipv6.conf.lo.disable_ipv6` and tests that ::1 answers at once; the fix `lo_ipv6` turns it back on for loopback
+   only, in `/etc/sysctl.d/99-zz-linuxguardian-loopback-ipv6.conf` (sorts after other `99-*` files). The ufw IPv6 fix is
+   not offered, and `linux_hardening.sh` refuses it, while loopback IPv6 is off.
+2. **Every system change is written to a ledger.** `linux_hardening.sh` and `linux_firewall.sh` call
+   `login_watch.py --mark-change` after each change, with the last login's duration and the exact undo command
+   (`~/.linuxguardian/state/system_changes.json`).
+3. **Slow logins are a sensor.** `login_watch.py` times "Xsession: Beginning session setup" to the next "Running GNOME
+   Shell" (normal: a few seconds). Over 30 s is a warning that names the ledger entries since the last normal login,
+   newest first, with their undo commands. Several slow logins at once are one event; the first sensor run only learns.
+4. **Background runs never poke sudo** (`sudo -n` without a terminal logs "conversation failed", which looks like a
+   failed sudo attempt), and **alerts that can't reach the desktop yet are kept**, not dropped: `notify_events.py`
+   checks that the notification service exists and leaves its watermark alone when sending fails.
+5. **The daily scan waits 15 minutes** before starting, so a catch-up run never competes with logging in.
+
 ## Timeline and notifications
 
 `timeline.py` folds identical findings (a count changing doesn't make a finding new) and lets you mark

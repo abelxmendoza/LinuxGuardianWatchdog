@@ -40,7 +40,7 @@ import linuxguardian_ui.window as window_mod  # noqa: E402
 from linuxguardian_ui.pages.health_window import HealthWindow  # noqa: E402
 from linuxguardian_ui.pages.terminal_window import TerminalWindow  # noqa: E402
 
-TABS = ["dashboard", "hardening", "vpn", "processes", "cache", "updates", "exposure", "apps", "incidents", "malware"]
+TABS = ["dashboard", "hardening", "vpn", "processes", "cache", "updates", "exposure", "firewall", "apps", "incidents", "malware"]
 
 
 def pump(seconds: float = 0.0, until=None, timeout: float = 20.0) -> bool:
@@ -254,6 +254,55 @@ def test_the_health_window_runs_the_real_self_check_and_shows_every_area(world):
         assert area in titles, area
     assert got[0]["level"] in ("ok", "info", "warning", "critical") and got[0]["headline"]
     hw.destroy()
+
+
+def test_the_firewall_tab_shows_state_blocks_and_only_offers_a_previewed_rule(world, monkeypatch):
+    from linuxguardian_ui.pages.firewall import FirewallPage, rules_from_output
+
+    t = world["tmp"]
+    (t / "fw.conf").write_text("ENABLED=no\nLOGLEVEL=low\n")
+    (t / "fw.default").write_text('DEFAULT_INPUT_POLICY="DROP"\nDEFAULT_OUTPUT_POLICY="ACCEPT"\n')
+    (t / "fw.log").write_text("Oct 13 10:48:21 h kernel: [1.0] [UFW BLOCK] IN=wlp1 OUT= MAC= SRC=45.33.32.156 DST=10.0.0.2 PROTO=TCP SPT=4 DPT=22\n")
+    ufw = t / "bin" / "ufw"
+    ufw.write_text("#!/bin/sh\nexit 0\n")
+    ufw.chmod(0o755)
+    monkeypatch.setenv("LG_UFW_CONF", str(t / "fw.conf"))
+    monkeypatch.setenv("LG_UFW_DEFAULT", str(t / "fw.default"))
+    monkeypatch.setenv("LG_UFW_LOG", str(t / "fw.log"))
+    toasts = Adw.ToastOverlay()
+    page = FirewallPage(toasts)
+    holder = Gtk.Window()
+    holder.set_child(page)
+    holder.present()
+    assert pump(until=lambda: "Firewall is OFF." in labels(page), timeout=30)
+    assert pump(until=lambda: any("1 connections blocked" in l for l in labels(page)), timeout=30)
+    assert buttons(page, "Turn firewall on…") and not buttons(page, "Turn firewall off…")
+
+    assert not page.add_btn.get_sensitive()                                            # nothing to add before a preview
+    page.port_entry.set_text("8080")
+    page.from_entry.set_text("192.168.1.50")
+    page._preview()
+    assert pump(until=lambda: "sudo ufw allow proto tcp from 192.168.1.50" in page.plan_label.get_label(), timeout=20)
+    assert page.add_btn.get_sensitive()
+    page.port_entry.set_text("8081")                                                   # any edit needs a new preview
+    assert not page.add_btn.get_sensitive()
+    page.port_entry.set_text("22; reboot")
+    page._preview()
+    assert pump(until=lambda: "isn't a port" in page.plan_label.get_label(), timeout=20)
+    assert not page.add_btn.get_sensitive()
+
+    escalations = t / "escalations.log"
+    before = escalations.read_text() if escalations.exists() else ""
+    page.load_rules()                                                                  # the stand-in password prompt is dismissed
+    assert pump(until=lambda: not page._busy, timeout=20)
+    after = escalations.read_text() if escalations.exists() else ""
+    assert after.count("pkexec") == before.count("pkexec") + 1
+    assert page._rules is None and "ufw only shows its rules" in " ".join(labels(page))
+    assert rules_from_output(["x", "LG_RULES_BEGIN", "Status: inactive", "LG_RULES_END"]) == {"active": False, "rules": []}
+    assert "Firewall is OFF." in page.as_text()
+    holder.destroy()
+    ufw.unlink()
+    assert world["errors"] == [], [str(e[1]) for e in world["errors"]]
 
 
 # ========================================================================================== failure

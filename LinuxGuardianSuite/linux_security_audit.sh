@@ -155,8 +155,9 @@ else
   check "No mandatory access control (SELinux/AppArmor) enforcing" warn
 fi
 
-# Passwordless sudoers
-if sudo_rules="$(sudo -l -n 2>/dev/null)"; then
+# Passwordless sudoers. Only asked from a terminal: from the timer or the app there is nobody to answer, and `sudo -n` then
+# writes "pam_unix(sudo:auth): conversation failed" to the auth log, which looks like a failed sudo attempt to anything watching it.
+if [ -t 0 ] && sudo_rules="$(sudo -l -n 2>/dev/null)"; then
   if grep -q NOPASSWD <<< "$sudo_rules"; then
     check "Passwordless sudo entries found for current user" warn "review /etc/sudoers.d/"
   else

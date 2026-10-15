@@ -302,7 +302,7 @@ def test_monitoring_end_to_end_through_the_command_line_tools(world):
     tl = json.loads(world.suite("timeline.py", "--json", "--min-severity", "warning").stdout)
     assert any(e["kind"] == "incident" for e in (tl["entries"] if isinstance(tl, dict) else tl))
     status = json.loads(world.suite("sensors.py", "--status", "--json").stdout)
-    assert status["active"] and len(status["sensors"]) == 12
+    assert status["active"] and len(status["sensors"]) == 13
     assert world.escalations() == ""                                                # monitoring never asked for administrator rights
 
 

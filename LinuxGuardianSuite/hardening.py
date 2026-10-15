@@ -12,7 +12,7 @@ fixed scripts); the rest run as you.
   hardening.py --undo FIX        put back what the fix replaced
 
 Test hooks: LG_HOME, LG_HARDEN_HOME ($HOME), LG_PROC_SYS (/proc/sys), LG_UFW_DEFAULT, LG_UFW_CONF, LG_GDM_CONF,
-LG_VINO_BIN; gsettings/ss/pgrep/ip/lsblk/mokutil are found on PATH.
+LG_VINO_BIN, LG_LOOPBACK_PROBE (refused|open|timeout|unavailable: skip the real ::1 test); gsettings/ss/pgrep/ip/lsblk/mokutil are found on PATH.
 """
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import sys
@@ -300,12 +301,75 @@ def _has_ipv6() -> bool:
     return rc == 0 and "inet6" in out
 
 
+def loopback_probe(timeout: float = 2.0) -> str:
+    """Does ::1 answer at once? refused/open = fine; timeout = programs that try ::1 hang; unavailable = no IPv6 at all (also instant)."""
+    fake = os.environ.get("LG_LOOPBACK_PROBE")
+    if fake:
+        return fake
+    try:
+        probe = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    except OSError:
+        return "unavailable"
+    port = 9
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as free:       # a port nobody listens on: bind, note it, close
+            free.bind(("::1", 0))
+            port = free.getsockname()[1]
+    except OSError:
+        pass
+    probe.settimeout(timeout)
+    try:
+        probe.connect(("::1", port))
+        return "open"
+    except ConnectionRefusedError:
+        return "refused"
+    except (socket.timeout, TimeoutError):
+        return "timeout"
+    except OSError:
+        return "unavailable"
+    finally:
+        probe.close()
+
+
+def loopback_ipv6_off() -> bool:
+    return sysctl_value("net.ipv6.conf.lo.disable_ipv6") == 1
+
+
+def check_loopback_ipv6() -> dict:
+    why = ("Programs on this laptop talk to each other over 'loopback' (127.0.0.1 and ::1). Many try ::1 first and expect an "
+           "instant answer. With IPv6 switched off on loopback, that attempt can hang for about two minutes instead: on "
+           "2026-10-15 it held every login at a black screen. Turning IPv6 off on your network connections is fine; on loopback it isn't.")
+    lo = sysctl_value("net.ipv6.conf.lo.disable_ipv6")
+    probe = loopback_probe()
+    if lo is None:
+        return check("loopback_ipv6", "Network", "Loopback answers instantly", "info",
+                     "IPv6 is switched off in the kernel altogether, so nothing waits on ::1.", why)
+    if lo == 1 or probe == "timeout":
+        detail = ("net.ipv6.conf.lo.disable_ipv6 = 1" if lo == 1 else "net.ipv6.conf.lo.disable_ipv6 = 0") + f"; a test connection to ::1: {probe}"
+        return check("loopback_ipv6", "Network", "Loopback answers instantly", "attention",
+                     "IPv6 is switched off on loopback, so programs that try ::1 can hang (slow logins, stalled apps)." if lo == 1 else
+                     "A connection to ::1 hangs instead of being answered, so programs that try it stall.", why, detail=detail,
+                     fixes=[fix("lo_ipv6", "Turn IPv6 back on for loopback only", "root",
+                                ["Sets net.ipv6.conf.lo.disable_ipv6 = 0 now and in /etc/sysctl.d (survives reboots).",
+                                 "Your network connections keep whatever IPv6 setting they have. Needs your password."], recommended=True)])
+    return check("loopback_ipv6", "Network", "Loopback answers instantly", "ok", "::1 answers at once, so nothing waits on it.", why,
+                 detail=f"a test connection to ::1: {probe}")
+
+
 def check_firewall_ipv6() -> dict:
     why = "If the firewall ignores IPv6, anything reachable over IPv6 skips every rule you set."
     default = read_text(Path(os.environ.get("LG_UFW_DEFAULT", "/etc/default/ufw")))
     if default is None:
         return check("firewall_ipv6", "Network", "Firewall covers IPv6", "unknown", "Couldn't read the firewall settings.", why)
     v6_on = re.search(r"^IPV6=yes", default, re.M | re.I) is not None
+    if loopback_ipv6_off():
+        # ufw's IPv6 rules begin by allowing loopback; with IPv6 off on loopback they fail to load ("ip6tables-restore: line 4
+        # failed") and the half-loaded firewall can make ::1 hang. Fix loopback first; never offer the IPv6 switch on top of it.
+        return check("firewall_ipv6", "Network", "Firewall covers IPv6", "attention",
+                     ("The firewall is set to filter IPv6, but IPv6 is off on loopback, so its IPv6 rules can't load properly."
+                      if v6_on else "IPv6 is off on loopback; fix that first (see 'Loopback answers instantly')."), why,
+                     detail="IPV6=" + ("yes" if v6_on else "no") + " in /etc/default/ufw; net.ipv6.conf.lo.disable_ipv6 = 1",
+                     advice="Use the fix under 'Loopback answers instantly', then restart the firewall (Firewall tab).")
     if v6_on:
         return check("firewall_ipv6", "Network", "Firewall covers IPv6", "ok", "The firewall filters IPv6 as well as IPv4.", why)
     listening_v6 = [a for a in listeners(5900) if ":" in a] + [a for p in (22, 80, 443, 631, 8080) for a in listeners(p) if ":" in a]
@@ -561,7 +625,7 @@ def check_apparmor() -> dict:
                  advice="sudo systemctl enable --now apparmor")
 
 
-CHECKS = (check_screen_sharing, check_screen_lock, check_lock_notifications, check_auto_login, check_firewall, check_firewall_ipv6,
+CHECKS = (check_screen_sharing, check_screen_lock, check_lock_notifications, check_auto_login, check_firewall, check_loopback_ipv6, check_firewall_ipv6,
           check_firewall_logging, check_kernel_settings, check_dns, check_ssh_keys, check_secret_files, check_disk_encryption,
           check_secure_boot, check_apparmor, check_scheduler, check_live_monitoring)
 
@@ -584,7 +648,7 @@ FIX_LABELS = {
     "perms_secrets": ("Credential files made private", "user"), "scheduler": ("Daily background protection", "user"),
     "sensors_timer": ("Live attack monitoring", "user"),
     "sysctl": ("Recommended kernel settings", "root"), "ufw_ipv6": ("Firewall filters IPv6", "root"),
-    "ufw_logging": ("Firewall logging on", "root"),
+    "ufw_logging": ("Firewall logging on", "root"), "lo_ipv6": ("IPv6 back on for loopback", "root"),
 }
 
 
@@ -806,7 +870,7 @@ USER_FIXES = {
     "lock_notifications": (apply_lock_notifications, lambda: undo_gsettings("lock_notifications")),
     "perms_ssh": (apply_perms_ssh, lambda: undo_modes("perms_ssh")), "perms_secrets": (apply_perms_secrets, lambda: undo_modes("perms_secrets")),
 }
-ROOT_FIXES = ("sysctl", "ufw_ipv6", "ufw_logging")
+ROOT_FIXES = ("sysctl", "ufw_ipv6", "ufw_logging", "lo_ipv6")
 
 
 def _undo_tailscale() -> dict:
@@ -843,6 +907,8 @@ def snapshot(fix_id: str) -> dict:
         return {"sysctl": {k: v for k in SYSCTL_TARGETS if (v := sysctl_value(k)) is not None}}
     if fix_id == "ufw_ipv6":
         return {"ipv6": "yes" if re.search(r"^IPV6=yes", read_text(Path(os.environ.get("LG_UFW_DEFAULT", "/etc/default/ufw"))) or "", re.M) else "no"}
+    if fix_id == "lo_ipv6":
+        return {"lo": sysctl_value("net.ipv6.conf.lo.disable_ipv6")}
     if fix_id == "ufw_logging":
         m = re.search(r"^LOGLEVEL=(\w+)", read_text(Path(os.environ.get("LG_UFW_CONF", "/etc/ufw/ufw.conf"))) or "", re.M)
         return {"loglevel": m.group(1) if m else "low"}
@@ -858,6 +924,8 @@ def undo_args(fix_id: str) -> list[str]:
             if k in SYSCTL_TARGETS and isinstance(v, int) and 0 <= v <= 9:
                 args += [k, str(v)]
         return args
+    if fix_id == "lo_ipv6":
+        return [str(rec["lo"])] if rec.get("lo") in (0, 1) else []
     if fix_id == "ufw_logging":
         lvl = rec.get("loglevel")
         return [lvl] if lvl in ("off", "low", "medium", "high", "full") else []

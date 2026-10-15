@@ -17,6 +17,7 @@ from linuxguardian_ui.scan_history import load_last_scan
 from linuxguardian_ui.pages.cache_cleaner import CacheCleanerPage  # noqa: E402
 from linuxguardian_ui.pages.dashboard import DashboardPage  # noqa: E402
 from linuxguardian_ui.pages.exposure import ExposurePage  # noqa: E402
+from linuxguardian_ui.pages.firewall import FirewallPage  # noqa: E402
 from linuxguardian_ui.pages.hardening import HardeningPage  # noqa: E402
 from linuxguardian_ui.pages.processes import ProcessesPage  # noqa: E402
 from linuxguardian_ui import crashlog  # noqa: E402
@@ -30,7 +31,7 @@ from linuxguardian_ui.pages.vpn import VpnPage  # noqa: E402
 
 # What the terminal-commands window is pre-filtered to for each tab, so the button opens the commands for the feature you are looking at.
 TAB_FOCUS = {"dashboard": "scan", "hardening": "hardening", "vpn": "vpn", "processes": "process", "cache": "cache", "updates": "updates",
-             "exposure": "listening", "incidents": "incidents", "malware": "quarantine"}
+             "exposure": "listening", "firewall": "firewall", "incidents": "incidents", "malware": "quarantine"}
 
 
 class LinuxGuardianWindow(Adw.ApplicationWindow):
@@ -129,6 +130,12 @@ class LinuxGuardianWindow(Adw.ApplicationWindow):
             self._safe(lambda: ExposurePage(self.toast_overlay), "Exposure"), "exposure", "Exposure"
         )
         exposure_page.set_icon_name("network-wired-symbolic")
+
+        firewall_page = stack.add_titled(
+            self._safe(lambda: FirewallPage(self.toast_overlay, lambda: stack.set_visible_child_name("exposure")), "Firewall"),
+            "firewall", "Firewall",
+        )
+        firewall_page.set_icon_name("channel-secure-symbolic")
 
         apps_page = stack.add_titled(self._safe(lambda: AppsPage(self.toast_overlay), "Apps"), "apps", "Apps")
         apps_page.set_icon_name("folder-download-symbolic")

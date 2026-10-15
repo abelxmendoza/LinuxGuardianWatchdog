@@ -124,10 +124,12 @@ lg_cmd_has_flag() {
 
 _lg_descendant_pids() {
   local pid="$1" child
-  echo "$pid"
+  # The reader stops as soon as it finds what it wants; when it has, stop quietly instead of writing
+  # "Broken pipe" errors into the journal for every remaining process.
+  echo "$pid" 2>/dev/null || return 1
   for child in $(ps -o pid= --ppid "$pid" 2>/dev/null); do
     child="${child// /}"
-    [ -n "$child" ] && _lg_descendant_pids "$child"
+    if [ -n "$child" ]; then _lg_descendant_pids "$child" || return 1; fi
   done
 }
 

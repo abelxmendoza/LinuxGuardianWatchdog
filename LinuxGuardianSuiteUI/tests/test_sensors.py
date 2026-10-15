@@ -435,9 +435,9 @@ def test_cli_run_and_status(box):
     import subprocess
     env = dict(os.environ)
     out = subprocess.run([sys.executable, str(ROOT / "LinuxGuardianSuite" / "sensors.py"), "--run"], capture_output=True, text=True, env=env)
-    assert out.returncode == 0 and "12 of 12 working" in out.stdout
+    assert out.returncode == 0 and "13 of 13 working" in out.stdout
     st = json.loads(subprocess.run([sys.executable, str(ROOT / "LinuxGuardianSuite" / "sensors.py"), "--status", "--json"], capture_output=True, text=True, env=env).stdout)
-    assert st["active"] and len(st["sensors"]) == 12
+    assert st["active"] and len(st["sensors"]) == 13
 
 
 def test_expected_programs_can_be_allowed_and_broad_paths_cannot(box, monkeypatch):

@@ -28,7 +28,7 @@ in a development checkout, or running ROS 2 / PX4 / Gazebo / Docker) are recorde
 | Area | What you get |
 |---|---|
 | **Dashboard** | One-button scans (ClamAV + rkhunter), a scored posture audit (firewall, SSH, updates, sudoers, disk...), scanner health (definitions age, rootkit baseline), live activity. |
-| **Live monitoring** (systemd user timer, every 5 min) | 12 read-only sensors: logins, processes, network (with free known-bad address lists), start-up entries, accounts, USB, dropped programs, LinuxGuardian's own files, tripwires on SSH keys and sudo/login/package-source rules, decoy files, defenses switched off, new setuid programs. A dead-man's switch warns if monitoring itself stops. |
+| **Live monitoring** (systemd user timer, every 5 min) | 13 read-only sensors: logins, processes, network (with free known-bad address lists), start-up entries, accounts, USB, dropped programs, LinuxGuardian's own files, tripwires on SSH keys and sudo/login/package-source rules, decoy files, defenses switched off, new setuid programs, and slow logins (a black screen before the desktop, tied to any change LinuxGuardian made before it). A dead-man's switch warns if monitoring itself stops. |
 | **Incidents** | Related events grouped into plain-language stories with next steps, a **Timeline** (repeats folded, mark as seen), one-click read-only evidence bundles, and an honest **attack coverage map** (what is covered, partly covered, not covered). Optional, opt-in AI explainer (local Ollama or Claude): redacted, advisory only, read-only checks. |
 | **Alert policy** | Every event is an *incident* (something may have happened), a *finding* (a standing weakness) or *information*. Desktop pop-ups only for warning-and-above incidents and critical findings. A risk you accept stays visible but stops nagging; it never hides an unrelated incident. |
 | **Malware** | Findings explained in plain language, re-verification, **reversible quarantine**, restore, permanent delete only on request; a guide to the kinds of Linux malware. |
@@ -38,6 +38,7 @@ in a development checkout, or running ROS 2 / PX4 / Gazebo / Docker) are recorde
 | **Cleaner** | Browser and system caches, dry-run first. |
 | **Updates** | Pending security/system/third-party/snap updates, one-click install via polkit, release guard, pinned stacks (ROS 2, Gazebo, NVIDIA) never forced. |
 | **Exposure** | What is listening and who can reach it; a ROS 2-aware firewall helper that adds narrow `ufw` rules for one robot, previewed and removable. |
+| **Firewall** | The ufw firewall at a glance (on/off, defaults, logging, whether its service actually started, and why not), the numbered rules, what was blocked recently and from where. Controls: turn on/off, restart, defaults, logging, add a rule (previewed, warns when it opens a port to anyone), delete a rule (only if it is still the rule you saw). One password prompt per change. |
 | **Apps** | Export your app list and plan/install it on another Ubuntu laptop (no repos, keys or dotfiles). |
 | **File integrity** | SHA-256 baseline of documents and persistence locations (shell files, `~/.ssh`, autostart, git hooks); development checkouts are treated sensibly. |
 | **Self-care** | Title-bar **Terminal** button (every feature as a copyable command if the app breaks), **Health** button (the app checking its own files, permissions and state), per-tab crash safety and a crash log. |
@@ -112,6 +113,9 @@ LinuxGuardianWatchdog/
 │   ├── diagnostics.py           # Feature-by-feature self-check
 │   ├── ros_firewall.py          # ROS 2 domain port math + peer validation for the firewall helper
 │   ├── linux_ros_firewall.sh    # Preview/add/remove narrow ufw rules for a robot
+│   ├── firewall_control.py      # ufw status in plain words, rule parsing, rule plans, block-log summary (no root)
+│   ├── linux_firewall.sh        # Firewall tab backend: status, rules, add/delete, on/off, defaults, logging
+│   ├── login_watch.py           # Times each login; ledger of system changes LinuxGuardian made, with undo commands
 │   ├── linux_apps.sh            # ...and the installer for them
 │   ├── events.py                # Shared security-event format written to ~/.linuxguardian/incidents/
 │   ├── audit_events.py          # Risk acceptance + audit findings as events
@@ -202,6 +206,12 @@ cd LinuxGuardianSuite
 ./linux_ros_firewall.sh --apply --peer 192.168.1.50                      # ...add them (one password prompt); --remove undoes them
 ./linux_guardian.sh --enable-auto-update   # turn on ClamAV's background updater (asks first, password via polkit)
 ./linux_guardian.sh --scan --rootkit       # scan + rkhunter as root (password via polkit; without it the rootkit check is skipped and says so)
+./linux_firewall.sh --status               # firewall on? defaults, logging, did its service start? (no root)
+./linux_firewall.sh --blocks               # what it blocked recently, busiest sources and ports (needs the 'adm' group)
+./linux_firewall.sh --rules                # the numbered rules (one password prompt, read-only)
+./linux_firewall.sh --plan-add --action limit --port 22 --from 192.168.1.0/24   # preview one rule; --add adds it
+./linux_firewall.sh --enable               # also --disable, --restart, --default-incoming deny|reject, --logging low
+./login_watch.py --check                   # how long recent logins took (over 30 s is reported as a slow login)
 ./linux_exposure.sh --check                # what's listening, who can reach it (read-only, no root)
 ./linux_exposure.sh --record               # ...and log an event for each NEW exposure
 ```

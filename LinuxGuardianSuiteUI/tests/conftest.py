@@ -32,6 +32,8 @@ def pytest_configure(config):
     (root / "home" / ".linuxguardian").chmod(0o700)
     (root / "proc").mkdir()
     os.environ["LG_PROC"] = str(root / "proc")          # an empty /proc: no test depends on what happens to be running on the host
+    (root / "journal.txt").write_text("")
+    os.environ["LG_LOGIN_JOURNAL"] = str(root / "journal.txt")   # an empty journal: the host's real logins never reach a test
     atexit.register(shutil.rmtree, root, ignore_errors=True)
 
 

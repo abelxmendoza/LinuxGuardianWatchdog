@@ -2,7 +2,7 @@
 # linux_hardening.sh — the hardening fixes that need root (one password prompt each, fixed scripts).
 #
 # Usage:
-#   linux_hardening.sh --apply FIX     FIX is one of: sysctl, ufw_ipv6, ufw_logging
+#   linux_hardening.sh --apply FIX     FIX is one of: sysctl, ufw_ipv6, ufw_logging, lo_ipv6
 #   linux_hardening.sh --undo FIX      Put back what --apply replaced
 #   linux_hardening.sh --check         The whole checklist (same as hardening.py --check)
 #   linux_hardening.sh -h | --help
@@ -72,6 +72,20 @@ f=/etc/default/ufw
 sed -i "s/^IPV6=.*/IPV6=no/" "$f" || exit 1
 exec ufw reload
 '
+# Loopback IPv6 back on. Never the other way: switching IPv6 off on loopback makes programs that try ::1 hang (2026-10-15:
+# a ~130 s black screen at every login). The file sorts after any 99-*.conf that turned it off, so it wins at boot.
+PRIV_LO_IPV6_APPLY='
+f=/etc/sysctl.d/99-zz-linuxguardian-loopback-ipv6.conf
+umask 022
+printf "%s\n" "# Written by LinuxGuardian Watchdog: IPv6 stays on for loopback (::1). Delete this file (or use Undo in the app) to remove it." \
+  "net.ipv6.conf.lo.disable_ipv6 = 0" > "$f" || exit 1
+exec sysctl -w net.ipv6.conf.lo.disable_ipv6=0
+'
+PRIV_LO_IPV6_UNDO='
+case "$1" in 0|1) ;; *) echo "refusing value" >&2; exit 2 ;; esac
+rm -f /etc/sysctl.d/99-zz-linuxguardian-loopback-ipv6.conf
+exec sysctl -w net.ipv6.conf.lo.disable_ipv6="$1"
+'
 PRIV_UFW_LOGGING_APPLY='exec ufw logging low'
 PRIV_UFW_LOGGING_UNDO='
 case "$1" in off|low|medium|high|full) ;; *) echo "refusing log level" >&2; exit 2 ;; esac
@@ -86,7 +100,7 @@ case "${1:-}" in
   *) lg_error "Unknown option: $1"; usage; exit 1 ;;
 esac
 case "$FIX" in
-  sysctl|ufw_ipv6|ufw_logging) ;;
+  sysctl|ufw_ipv6|ufw_logging|lo_ipv6) ;;
   *) lg_error "Unknown fix '$FIX'. Fixes that don't need a password run through hardening.py."; exit 3 ;;
 esac
 
@@ -100,17 +114,24 @@ run_root() {
   return "${PIPESTATUS[0]}"
 }
 
+if [ "$MODE" = "apply" ] && [ "$FIX" = "ufw_ipv6" ] \
+   && [ "$(cat "${LG_PROC_SYS:-/proc/sys}/net/ipv6/conf/lo/disable_ipv6" 2>/dev/null)" = "1" ]; then
+  lg_error "IPv6 is switched off on loopback, so the firewall's IPv6 rules would fail to load and could make ::1 hang. Fix loopback first (lo_ipv6). Nothing was changed."
+  exit 3
+fi
 if [ "$MODE" = "apply" ]; then
   prev="$(python3 "$HP" --snapshot "$FIX")"
   case "$FIX" in
     sysctl) script="$PRIV_SYSCTL_APPLY" ;;
     ufw_ipv6) script="$PRIV_UFW_IPV6_APPLY" ;;
     ufw_logging) script="$PRIV_UFW_LOGGING_APPLY" ;;
+    lo_ipv6) script="$PRIV_LO_IPV6_APPLY" ;;
   esac
   lg_info "Applying '$FIX' (the desktop will ask for your password)..."
   run_root "$script"; rc=$?
   case "$rc" in
     0) python3 "$HP" --record "$FIX" "$prev"
+       python3 "$SCRIPT_DIR/login_watch.py" --mark-change "Hardening applied: $FIX" --undo "$SCRIPT_DIR/linux_hardening.sh --undo $FIX" || true
        lg_ok "Done. You can undo it from the Hardening tab."
        lg_record_incident "maintenance" "info" "Hardening applied: $FIX" ;;
     126|127) lg_warn "Cancelled: the password prompt was dismissed. Nothing was changed."; exit 2 ;;
@@ -126,11 +147,15 @@ else
     ufw_logging)
       [ "${#uargs[@]}" -eq 1 ] || { lg_error "Nothing recorded to undo."; exit 3; }
       script="$PRIV_UFW_LOGGING_UNDO" ;;
+    lo_ipv6)
+      [ "${#uargs[@]}" -eq 1 ] || { lg_error "Nothing recorded to undo."; exit 3; }
+      script="$PRIV_LO_IPV6_UNDO" ;;
   esac
   lg_info "Undoing '$FIX' (the desktop will ask for your password)..."
   run_root "$script" ${uargs[@]+"${uargs[@]}"}; rc=$?
   case "$rc" in
     0) python3 "$HP" --forget "$FIX"; lg_ok "Put back as it was."
+       python3 "$SCRIPT_DIR/login_watch.py" --mark-change "Hardening undone: $FIX" --undo "$SCRIPT_DIR/linux_hardening.sh --apply $FIX" || true
        lg_record_incident "maintenance" "info" "Hardening undone: $FIX" ;;
     126|127) lg_warn "Cancelled: the password prompt was dismissed. Nothing was changed."; exit 2 ;;
     *) lg_error "That didn't work. See $log"; exit 1 ;;
